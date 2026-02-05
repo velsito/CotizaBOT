@@ -11,8 +11,6 @@ import fitz
 import math
 import copy
 
-chat_id = 6552392752
-
 # Configuración de Gemini API
 import os
 from google import genai
@@ -53,30 +51,29 @@ class EstadoRecoleccion:
     """Clase para mantener el estado de la recolección de datos"""
     def __init__(self):
         self.en_proceso = False
-        self.chat_id = None
         self.callback_pendiente = None
         self.datos_recolectados = None
         
-estado_global = EstadoRecoleccion()
+estados_usuarios = {}
+
+def obtener_estado(chat_id:int) -> EstadoRecoleccion:
+    """Obtiene o crea el estado de recolección para un chat_id"""
+    if chat_id not in estados_usuarios:
+        estados_usuarios[chat_id] = EstadoRecoleccion()
+    return estados_usuarios[chat_id]
+
+def resetear_estado_recoleccion(chat_id:int):
+    if chat_id in estados_usuarios:
+        del estados_usuarios[chat_id] # Eliminar estado para ese chat_id
+        logger.info(f"✅ Estado de recolección reseteado para chat_id {chat_id}")
 
 def registrar_callback_recoleccion(callback_func):
     # se llama desde bot para registrar la función de callback al inicializar
-
     global _callback_recoleccion 
     _callback_recoleccion = callback_func
     logger.info("callback recoleccion registrado")
 
 _callback_recoleccion = None
-
-
-def resetear_estado_recoleccion():
-    """Resetea el estado global de recolección - llamar al finalizar o cancelar"""
-    global estado_global
-    estado_global.en_proceso = False
-    estado_global.chat_id = None
-    estado_global.callback_pendiente = None
-    estado_global.datos_recolectados = None
-    logger.info("✅ Estado de recolección reseteado")
 
 # Almacenamiento temporal para datos en edición
 datos_en_edicion = {
@@ -966,12 +963,16 @@ async def analizar_esquema_unifilar(pdf_path: str) -> Dict[str, Any]:
         logger.error(f"❌ Error crítico: {e}", exc_info=True)
         return {"status": "error", "errores": [str(e)]}
 
-async def iniciar_recoleccion_interactiva(mensaje_inicial: str = None) -> str:
+async def iniciar_recoleccion_interactiva(chat_id: int):
     """
     Inicia el flujo de recolección interactiva de datos
     Esta función NO ejecuta el dimensionamiento, solo inicia el flujo en Telegram
     """
-    global estado_global, _callback_recoleccion, chat_id
+    estado = obtener_estado(chat_id)
+    if estado.en_proceso:
+        return "⚠️ Ya hay un proceso de recolección en curso. Por favor, complétalo primero."
+    
+    estado.en_proceso = True
 
     try:
         # Verificar que el callback esté registrado
@@ -979,16 +980,15 @@ async def iniciar_recoleccion_interactiva(mensaje_inicial: str = None) -> str:
             return "❌ Error: Sistema de recolección no inicializado. Contacta al administrador."
         
         # Verificar que no haya otro proceso en curso
-        if estado_global.en_proceso:
+        if estado.en_proceso:
             return "⚠️ Ya hay un proceso de recolección en curso. Por favor, complétalo primero."
         
         # Inicializar estado
-        estado_global.en_proceso = True
-        estado_global.chat_id = chat_id
-        estado_global.datos_recolectados = None
+        estado.en_proceso = True
+        estado.datos_recolectados = None
         
         # Llamar al callback del bot para iniciar la recolección
-        mensaje = mensaje_inicial or "Vamos a dimensionar tu tablero eléctrico. Te haré algunas preguntas:"
+        mensaje = "Vamos a dimensionar tu tablero eléctrico. Te haré algunas preguntas:"
         
         _callback_recoleccion(  # ejecuto la funcion de iniciar_recoleccion
             #chat_id=chat_id,
@@ -1000,12 +1000,12 @@ async def iniciar_recoleccion_interactiva(mensaje_inicial: str = None) -> str:
         
         return """✅ Proceso de recolección iniciado.
 
-Por favor, responde las preguntas que aparecerán en los botones de Telegram.
-Una vez completes todos los datos, generaré el dimensionamiento automáticamente."""
-        
+    Por favor, responde las preguntas que aparecerán en los botones de Telegram.
+    Una vez completes todos los datos, generaré el dimensionamiento automáticamente."""
+            
     except Exception as e:
         logger.exception("Error iniciando recolección")
-        estado_global.en_proceso = False
+        estado.en_proceso = False
         return f"❌ Error al iniciar recolección: {str(e)}"
 
 async def _ejecutar_dimensionamiento_con_datos(datos: dict) -> str:

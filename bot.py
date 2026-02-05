@@ -4,10 +4,6 @@ from servidor_mcp import registrar_callback_recoleccion
 from dotenv import load_dotenv
 import asyncio
 from pathlib import Path
-import base64
-import fitz
-import io 
-import base64
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -24,8 +20,6 @@ EXCEL_OUTPUT_DIR = os.getenv("EXCEL_OUTPUT", "./resultados/")
 
 load_dotenv(dotenv_path=".env")
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-CHAT_ID = int(os.getenv("CHAT_ID"))
-chat_id= CHAT_ID
 
 if not TELEGRAM_TOKEN:
     raise RuntimeError("Falta la variable de entorno TELEGRAM_TOKEN")
@@ -66,6 +60,9 @@ async def iniciar_recoleccion_datos(update: Update = None, context: ContextTypes
         update: (Opcional) Objeto Update de Telegram para acceder a información del mensaje
         context: (Opcional) Contexto del usuario para almacenar datos
     """
+
+    CHAT_ID = update.effective.chat_id if update else None
+    
     keyboard = [
         [InlineKeyboardButton("3Px40A", callback_data="sel_3Px40A"),
          InlineKeyboardButton("4Px40A", callback_data="sel_4Px40A")],
@@ -104,6 +101,8 @@ async def iniciar_recoleccion_datos(update: Update = None, context: ContextTypes
 
 async def reutilizar_ultima(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    CHAT_ID = update.effective.chat_id if update else None
+
     await query.answer()
 
     # Recuperar desde almacenamiento persistente
@@ -525,6 +524,8 @@ async def finalizar_material(update: Update, context: ContextTypes.DEFAULT_TYPE)
 async def confirmacion_final(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Maneja confirmación, cancelación o modificación de datos"""
     query = update.callback_query
+    CHAT_ID = query.message.chat_id
+
     await query.answer()
 
     if query.data == "conf_no":
@@ -563,7 +564,6 @@ async def confirmacion_final(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     config = context.user_data["config"]
     materiales = context.user_data["materiales"]
-    chat_id = query.message.chat_id
 
     try:
         # Ejecutar la función de dimensionamiento
@@ -572,7 +572,7 @@ async def confirmacion_final(update: Update, context: ContextTypes.DEFAULT_TYPE)
         datos_completos = {
             'config_input': config,
             'materiales_input': materiales,
-            'chat_id': chat_id,  # Opcional si lo necesitas en el futuro
+            'chat_id': CHAT_ID,  # Opcional si lo necesitas en el futuro
             'historial': context.user_data.get("historial", [])  # Pasar el historial completo
         }
 
@@ -873,6 +873,7 @@ async def start_new(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_message = update.message.text
+    CHAT_ID = update.effective_chat.id
 
     logger.info("Mensaje recibido: %s", user_message)
 
@@ -911,9 +912,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         _registrar_en_historial(context, response_text, "model")
         await update.message.reply_text(response_text)
 
-def callback_desde_mcp(mensaje: str, tipo: str, **kwargs):
+def callback_desde_mcp(mensaje: str, tipo: str, chat_id:int, **kwargs):
     """Función callback que programa tareas asíncronas"""
-    
+    CHAT_ID = chat_id  # Usar el chat_id pasado como parámetro
+
     try:
         loop = asyncio.get_event_loop()
         
@@ -923,14 +925,14 @@ def callback_desde_mcp(mensaje: str, tipo: str, **kwargs):
             
         elif tipo == 'resultado_final':
             # kwargs debería contener 'chat_id' si lo necesitas
-            chat_id_param = kwargs.get('chat_id', chat_id)  # Usar global si no viene
+            chat_id_param = kwargs.get('chat_id', CHAT_ID)  # Usar global si no viene
             loop.create_task(enviar_mensaje_telegram(chat_id_param, mensaje))
             logger.info("✅ Mensaje programado")
             
         elif tipo == 'enviar_excel':
             archivo_bytes = kwargs.get('archivo_bytes')
             nombre_archivo = kwargs.get('nombre_archivo', 'tablero.xlsx')
-            chat_id_param = kwargs.get('chat_id', chat_id)  # Usar global si no viene
+            chat_id_param = kwargs.get('chat_id', CHAT_ID)  # Usar global si no viene
             
             if not archivo_bytes:
                 logger.error("❌ No se recibió archivo_bytes")
