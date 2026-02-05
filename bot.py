@@ -970,7 +970,12 @@ async def handle_pdf(update: Update, context: ContextTypes.DEFAULT_TYPE): # LLAM
     
     try:
         # 1. Descargar PDF
-        documento = update.message.document
+        
+        BASE_DIR = Path(__file__).resolve().parent
+        folder_path = BASE_DIR / "data"
+        folder_path.mkdir(parents=True, exist_ok=True)
+        
+        documento = update.message.document # documento enviado por telegram
         file_name = documento.file_name
         
         logger.info(f"📥 PDF recibido: {file_name}")
@@ -982,9 +987,9 @@ async def handle_pdf(update: Update, context: ContextTypes.DEFAULT_TYPE): # LLAM
         path_local = folder_path / file_name
         
         await update.message.reply_text("📥 Descargando PDF...")
-        await file.download_to_drive(path_local)
+        await file.download_to_drive(str(path_local))
         
-        logger.info(f"✅ PDF guardado en: {path_local}")
+        logger.info(f"✅ PDF guardado temporalmente en: {path_local}")
         
         # 2. Analizar directamente
         mensaje_progreso = await update.message.reply_text(
@@ -1040,11 +1045,15 @@ async def handle_pdf(update: Update, context: ContextTypes.DEFAULT_TYPE): # LLAM
                 respuesta += f"\n<i>...y {len(errores) - 3} errores más</i>"
             
             await mensaje_progreso.edit_text(respuesta, parse_mode="HTML")
+            
+        if path_local.exists():
+            os.remove(path_local)
+            logger.info(f"🗑️ Archivo temporal eliminado: {path_local}")
     
     except Exception as e:
         logger.error(f"Error crítico en handle_pdf_directo: {e}", exc_info=True)
         await update.message.reply_text(
-            f"❌ <b>Error Crítico</b>\n\n{str(e)}",
+            f"❌ <b>Error Crítico en Servidor</b>\n\n{str(e)}",
             parse_mode="HTML"
         )
 
