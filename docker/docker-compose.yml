@@ -1,8 +1,0 @@
-services:
-  cotizaciones-bot:
-    build: .
-    container_name: cotizaciones-bot
-    ports:
-      - "8000:8000"
-    env_file:
-      - .env
