@@ -12,6 +12,12 @@ logger = logging.getLogger(__name__)
 _datos_cache: Optional[Dict[str, pd.DataFrame]] = None
 ruta_excel = BASE_DIR / "data" / file_name
 
+if not ruta_excel.exists():
+    print(f"❌ ERROR CRÍTICO: El archivo no existe en la ruta especificada.")
+    # Imprimimos qué archivos SI hay en la carpeta data para debuguear
+    if (BASE_DIR / "data").exists():
+        print(f"📂 Archivos encontrados en data/: {os.listdir(BASE_DIR / 'data')}")
+
 def cargar_datos(force_reload: bool = False) -> Dict[str, pd.DataFrame]:
     """
     Carga todas las hojas necesarias desde Excel usando Pandas.
