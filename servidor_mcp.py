@@ -1224,6 +1224,12 @@ def exportar_a_excel(
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")  
     nombre_archivo = OUTPUT_DIR / f"Tablero_{gabinete.codigo}_{timestamp}.xlsx"
     
+    if not os.path.exists(OUTPUT_DIR):
+        os.makedirs(OUTPUT_DIR, mode=0o777, exist_ok=True)
+        logger.info(f"📁 Carpeta {OUTPUT_DIR} creada con éxito.")
+        
+    logger.info(f"📝 Intentando escribir Excel en: {nombre_archivo}")
+        
     try:
         # Crear escritor de Excel
         with pd.ExcelWriter(nombre_archivo, engine='openpyxl') as writer:
