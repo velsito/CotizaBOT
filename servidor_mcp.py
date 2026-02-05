@@ -38,16 +38,16 @@ from dimensionador_tableros import (
 # Configuración
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("mcp-tableros-gemini")
-
-OUTPUT_DIR = Path("resultados")
-OUTPUT_DIR.mkdir(exist_ok=True)  # Crear carpeta si no existe
-FILE_NAME = 'tableros.xlsm'
 BASE_DIR = Path(__file__).resolve().parent
+FILE_NAME = 'tableros.xlsm'
 
-# === DEFINIR TOOLS PARA GEMINI (FORMATO CORRECTO) ===
+OUTPUT_DIR = BASE_DIR / "resultados"
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)  # Crear carpeta si no existe
 
-OUTPUT_DIR = Path("resultados")
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+try:
+    os.chmod(OUTPUT_DIR, 0o777)
+except:
+    pass
 
 class EstadoRecoleccion:
     """Clase para mantener el estado de la recolección de datos"""
