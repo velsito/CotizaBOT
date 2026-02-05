@@ -1220,19 +1220,24 @@ def exportar_a_excel(
         str: Ruta del archivo generado
     """
     
-    # Generar nombre único con timestamp
-    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")  
-    nombre_archivo = OUTPUT_DIR / f"Tablero_{gabinete.codigo}_{timestamp}.xlsx"
+    # # Generar nombre único con timestamp
+    # timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")  
+    # nombre_archivo = OUTPUT_DIR / f"Tablero_{gabinete.codigo}_{timestamp}.xlsx"
     
-    if not os.path.exists(OUTPUT_DIR):
-        os.makedirs(OUTPUT_DIR, mode=0o777, exist_ok=True)
-        logger.info(f"📁 Carpeta {OUTPUT_DIR} creada con éxito.")
+    # if not os.path.exists(OUTPUT_DIR):
+    #     os.makedirs(OUTPUT_DIR, mode=0o777, exist_ok=True)
+    #     logger.info(f"📁 Carpeta {OUTPUT_DIR} creada con éxito.")
+    
+    nombre_archivo_base = f"Tablero_{gabinete.codigo}.xlsx"
         
-    logger.info(f"📝 Intentando escribir Excel en: {nombre_archivo}")
+    solo_nombre = os.path.basename(nombre_archivo_base)
+    ruta_final = os.path.join("resultados", solo_nombre)
+        
+    logger.info(f"📝 Intentando escribir Excel en: {ruta_final}")
         
     try:
         # Crear escritor de Excel
-        with pd.ExcelWriter(nombre_archivo, engine='openpyxl') as writer:
+        with pd.ExcelWriter(ruta_final, engine='openpyxl') as writer:
             
             # === HOJA 1: RESUMEN DEL PROYECTO ===
             # Usar la hoja de resumen precalculada si se proporciona
@@ -1264,8 +1269,8 @@ def exportar_a_excel(
             df_entrada = pd.DataFrame(materiales_input)
             df_entrada.to_excel(writer, sheet_name='Materiales_Solicitados', index=False)
         
-        logger.info(f"✅ Excel generado: {nombre_archivo}")
-        return str(nombre_archivo)
+        logger.info(f"✅ Excel generado: {ruta_final}")
+        return str(ruta_final)
         
     except Exception as e:
         logger.error(f"❌ Error generando Excel: {e}")
