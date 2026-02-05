@@ -11,10 +11,6 @@ import fitz
 import math
 import copy
 
-# from mcp.server import Server
-# from mcp.server.stdio import stdio_server
-# from mcp.types import Tool, TextContent
-
 chat_id = 6552392752
 
 # Configuración de Gemini API
@@ -46,6 +42,7 @@ logger = logging.getLogger("mcp-tableros-gemini")
 OUTPUT_DIR = Path("resultados")
 OUTPUT_DIR.mkdir(exist_ok=True)  # Crear carpeta si no existe
 FILE_NAME = 'tableros.xlsm'
+BASE_DIR = Path(__file__).resolve().parent
 
 # === DEFINIR TOOLS PARA GEMINI (FORMATO CORRECTO) ===
 
@@ -282,8 +279,6 @@ async def analizar_esquema_unifilar1(pdf_path: str) -> Dict[str, Any]:
     """
 
     from unifilar import ConfiguracionProcesamiento, ProcesadorEsquemaUnifilar, FragmentoImagen, consolidar_conteo
-    import asyncio
-    from pathlib import Path
 
     temp_pdf_path = None
     inicio = asyncio.get_event_loop().time()
@@ -813,10 +808,8 @@ async def analizar_esquema_unifilar(pdf_path: str) -> Dict[str, Any]:
     import json
     import logging
     import os
-    import asyncio
     from datetime import datetime
-    from pathlib import Path
-    
+        
     logger = logging.getLogger(__name__)
     inicio = asyncio.get_event_loop().time()
     

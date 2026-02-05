@@ -3,11 +3,14 @@ import os
 from pydantic import BaseModel, Field
 import logging
 from typing import Dict, List, Tuple, Optional
+from pathlib import Path
 
+file_name = 'tableros.xlsm'
+BASE_DIR = Path(__file__).resolve().parent
 logger = logging.getLogger(__name__)
 
 _datos_cache: Optional[Dict[str, pd.DataFrame]] = None
-FILE_NAME = "data\\tableros.xlsm" 
+ruta_excel = BASE_DIR / "data" / file_name
 
 def cargar_datos(force_reload: bool = False) -> Dict[str, pd.DataFrame]:
     """
@@ -21,12 +24,12 @@ def cargar_datos(force_reload: bool = False) -> Dict[str, pd.DataFrame]:
         logger.info("📦 Usando datos en caché (Pandas Memory)")
         return _datos_cache
     
-    logger.info(f"📂 Cargando datos desde el archivo: {FILE_NAME}")
+    logger.info(f"📂 Cargando datos desde el archivo: {ruta_excel}")
     
     try:
         # 2. Usar pd.ExcelFile para abrir el archivo una sola vez
         # engine='openpyxl' es esencial para archivos .xlsm
-        with pd.ExcelFile(FILE_NAME, engine='openpyxl') as xls:
+        with pd.ExcelFile(ruta_excel, engine='openpyxl') as xls:
             
             hojas_config = {
                 'seleccionadores': 'SELECCIONADORES',
@@ -75,7 +78,7 @@ def cargar_datos(force_reload: bool = False) -> Dict[str, pd.DataFrame]:
         return datos
         
     except FileNotFoundError:
-        logger.error(f"❌ No se encontró el archivo Excel: {FILE_NAME}")
+        logger.error(f"❌ No se encontró el archivo Excel: {ruta_excel}")
         raise
     except Exception as e:
         logger.exception(f"❌ Error crítico en cargar_datos")
