@@ -991,8 +991,7 @@ async def iniciar_recoleccion_interactiva(chat_id: int):
         mensaje = "Vamos a dimensionar tu tablero eléctrico. Te haré algunas preguntas:"
         
         _callback_recoleccion(  # ejecuto la funcion de iniciar_recoleccion
-            #chat_id=chat_id,
-            mensaje=mensaje,
+            chat_id=chat_id,
             tipo='iniciar_flujo_recoleccion'
         )
         
@@ -1835,8 +1834,8 @@ async def run_mcp(question:str) -> str:
                     
                     # Llamar la función con los argumentos correctos
                     if func_name == "iniciar_recoleccion_interactiva":
-                        mensaje = func_args.get("mensaje_inicial") # opcional
-                        result = await func(mensaje_inicial=mensaje)
+                        chat_id = func_args.get("chat_id") # opcional
+                        result = await func(chat_id=chat_id)
                     elif func_name == "buscar_seleccionador":
                         result = func(referencia=func_args.get("referencia"))
                     elif func_name == "listar_gabinetes_disponibles":
