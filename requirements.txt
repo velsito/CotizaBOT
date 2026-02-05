@@ -1,17 +1,11 @@
-python-telegram-bot==20.7
-requests
-fastapi
-uvicorn
-telegram
-pandas
-pydantic
-python-dotenv
-ollama
-xlwings
-mcp
+python-telegram-bot==21.0.1
+httpx==0.27.0
 google-genai
+pandas
+openpyxl
 PyMuPDF
 pdf2image
-opencv-python
-google-generativeai
+opencv-python-headless
+python-dotenv
+gradio
 
