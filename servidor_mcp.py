@@ -106,9 +106,9 @@ def get_tools_declarations():
                         "type": "object",
                         "properties": {
     
-                            "mensaje_inicial": {
+                            "chat_id": {
                                 "type": "string",
-                                "description": "Mensaje opcional para mostrar al usuario antes de iniciar"
+                                "description": "ID del chat de Telegram donde se iniciará el proceso de recolección"
                             }
                         },
                         
