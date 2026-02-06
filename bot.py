@@ -988,26 +988,32 @@ async def enviar_archivo_telegram(chat_id:int, contenido_bytes:bytes, nombre_arc
 async def handle_pdf(update: Update, context: ContextTypes.DEFAULT_TYPE): # LLAMADA DIRECTA A LA TOOL SIN PASAR POR EL ORQUESTADOR
     
     try:
-        # 1. Descargar PDF
-        
-        BASE_DIR = Path(__file__).resolve().parent
-        folder_path = BASE_DIR / "data"
-        folder_path.mkdir(parents=True, exist_ok=True)
-        
-        documento = update.message.document # documento enviado por telegram
-        file_name = documento.file_name
-        
+        # 1. Descargar PDF en un directorio temporal escribible
+        import tempfile, time
+
+        documento = update.message.document  # documento enviado por telegram
+        file_name = Path(documento.file_name).name
+
         logger.info(f"📥 PDF recibido: {file_name}")
-        
-        folder_path = Path("data").absolute()
-        folder_path.mkdir(parents=True, exist_ok=True)
-        
+
+        # Usar el directorio temporal del sistema (p. ej. /tmp en Render)
+        temp_dir = Path(tempfile.gettempdir()) / "cotizabot"
+        try:
+            temp_dir.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            logger.error(f"No se pudo crear temp_dir {temp_dir}: {e}")
+            temp_dir = Path(".")  # fallback al directorio actual
+
         file = await documento.get_file()
-        path_local = folder_path / file_name
-        
+        path_local = temp_dir / file_name
+
+        # Evitar sobrescribir archivos existentes: añadir timestamp si ya existe
+        if path_local.exists():
+            path_local = temp_dir / f"{int(time.time())}_{file_name}"
+
         await update.message.reply_text("📥 Descargando PDF...")
         await file.download_to_drive(str(path_local))
-        
+
         logger.info(f"✅ PDF guardado temporalmente en: {path_local}")
         
         # 2. Analizar directamente
