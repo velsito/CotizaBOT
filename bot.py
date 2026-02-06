@@ -51,7 +51,7 @@ ultima_config_storage = {} # lo uso para almacenar los inputs de config y materi
 
 bot_application: Application = None
 
-async def iniciar_recoleccion_datos(update: Update = None, context: ContextTypes.DEFAULT_TYPE = None):
+async def iniciar_recoleccion_datos(update: Update = None, context: ContextTypes.DEFAULT_TYPE = None, chat_id: int = None):
     """
     Función llamada por el modelo MCP cuando invoca la tool dimensionar_tablero_completo.
     Inicia el flujo interactivo de recolección de datos
@@ -59,9 +59,16 @@ async def iniciar_recoleccion_datos(update: Update = None, context: ContextTypes
     Args:
         update: (Opcional) Objeto Update de Telegram para acceder a información del mensaje
         context: (Opcional) Contexto del usuario para almacenar datos
+        chat_id: (Opcional) ID del chat, utilizado cuando se llama desde el callback MCP
     """
 
-    CHAT_ID = update.effective.chat_id if update else None
+    # Obtener chat_id desde diferentes fuentes
+    if chat_id is not None:
+        chat_id_actual = chat_id
+    elif update and hasattr(update, 'effective_chat') and update.effective_chat:
+        chat_id_actual = update.effective_chat.id
+    else:
+        chat_id_actual = None
     
     keyboard = [
         [InlineKeyboardButton("3Px40A", callback_data="sel_3Px40A"),
@@ -79,15 +86,19 @@ async def iniciar_recoleccion_datos(update: Update = None, context: ContextTypes
     ]
     
     # Agregar opción para reutilizar última configuración (desde almacenamiento persistente)
-    if CHAT_ID in ultima_config_storage and ultima_config_storage[CHAT_ID]:
+    if chat_id_actual in ultima_config_storage and ultima_config_storage[chat_id_actual]:
         keyboard.insert(0, [InlineKeyboardButton("🔄 Usar datos del último tablero", callback_data="reutilizar_ultima")])
     else:
         print("no existe la ultima configuracion")    
 
     reply_markup = InlineKeyboardMarkup(keyboard)
 
+    if not chat_id_actual:
+        logger.error("❌ Error: chat_id_actual es None. No se puede enviar mensaje a Telegram")
+        return
+
     await bot_application.bot.send_message(
-        chat_id=CHAT_ID,
+        chat_id=chat_id_actual,
         text=(
             "🔧 <b> Dimensionador de Tableros Eléctricos </b>\n\n"
             "Paso 1/5: Selecciona el <b>Seleccionador de Referencia</b>:"
@@ -97,11 +108,11 @@ async def iniciar_recoleccion_datos(update: Update = None, context: ContextTypes
         parse_mode="HTML",
     )
     
-    logger.info(f"Iniciada recolección de datos para chat_id: {CHAT_ID}")
+    logger.info(f"✅ Iniciada recolección de datos para chat_id: {chat_id_actual}")
 
 async def reutilizar_ultima(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    CHAT_ID = update.effective.chat_id if update else None
+    chat_id_actual = update.effective_chat.id if update else None
 
     await query.answer()
 
@@ -113,7 +124,7 @@ async def reutilizar_ultima(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Resetear estado global para evitar "proceso en curso"
     from servidor_mcp import resetear_estado_recoleccion
-    resetear_estado_recoleccion(CHAT_ID)
+    resetear_estado_recoleccion(chat_id_actual)
     
     # Inicializar si no existen
     if "config" not in context.user_data:
@@ -524,7 +535,7 @@ async def finalizar_material(update: Update, context: ContextTypes.DEFAULT_TYPE)
 async def confirmacion_final(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Maneja confirmación, cancelación o modificación de datos"""
     query = update.callback_query
-    CHAT_ID = query.message.chat_id
+    chat_id_actual = query.message.chat_id
 
     await query.answer()
 
@@ -534,7 +545,7 @@ async def confirmacion_final(update: Update, context: ContextTypes.DEFAULT_TYPE)
         
         # Resetear estado global en servidor_mcp
         from servidor_mcp import resetear_estado_recoleccion
-        resetear_estado_recoleccion(CHAT_ID)
+        resetear_estado_recoleccion(chat_id_actual)
         
         context.user_data.clear()
         return ConversationHandler.END
@@ -572,7 +583,7 @@ async def confirmacion_final(update: Update, context: ContextTypes.DEFAULT_TYPE)
         datos_completos = {
             'config_input': config,
             'materiales_input': materiales,
-            'chat_id': CHAT_ID,  # Opcional si lo necesitas en el futuro
+            'chat_id': chat_id_actual,  # Opcional si lo necesitas en el futuro
             'historial': context.user_data.get("historial", [])  # Pasar el historial completo
         }
 
@@ -615,14 +626,14 @@ async def confirmacion_final(update: Update, context: ContextTypes.DEFAULT_TYPE)
         
         # Resetear estado global también en caso de error
         from servidor_mcp import resetear_estado_recoleccion
-        resetear_estado_recoleccion(CHAT_ID)
+        resetear_estado_recoleccion(chat_id_actual)
         
         ultima_config_guardada = None
 
     # Guardar en almacenamiento persistente ANTES de limpiar
     if ultima_config_guardada:
-        ultima_config_storage[CHAT_ID] = ultima_config_guardada
-        logger.info(f"✅ Configuración guardada para reutilización (chat_id: {CHAT_ID})")
+        ultima_config_storage[chat_id_actual] = ultima_config_guardada
+        logger.info(f"✅ Configuración guardada para reutilización (chat_id: {chat_id_actual})")
     
     # Limpiar datos del usuario después de procesar
     context.user_data.clear()
@@ -734,7 +745,7 @@ def crear_bot_application(token: str):
 async def cancelar(update: Update, context: ContextTypes.DEFAULT_TYPE): # fallback para salir de la operación de dimensionamiento
     """Cancela y finaliza la conversación actual."""
     # 1. Limpiamos los datos temporales de la recolección
-    CHAT_ID = update.effective_chat.id
+    chat_id_actual = update.effective_chat.id
 
     
     context.user_data.pop("config", None)
@@ -744,7 +755,7 @@ async def cancelar(update: Update, context: ContextTypes.DEFAULT_TYPE): # fallba
     context.user_data.pop("historial", None)
 
     from servidor_mcp import resetear_estado_recoleccion
-    resetear_estado_recoleccion(CHAT_ID)
+    resetear_estado_recoleccion(chat_id_actual)
 
     # 2. Informamos al usuario
     texto = "🚫 <b>Proceso cancelado.</b>\n\nHe limpiado los datos de este dimensionamiento. ¿En qué más puedo ayudarte?"
@@ -760,7 +771,7 @@ async def cancelar(update: Update, context: ContextTypes.DEFAULT_TYPE): # fallba
 
 async def handle_edicion_final(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_text = update.message.text
-    CHAT_ID = update.effective_chat.id
+    chat_id_actual = update.effective_chat.id
 
     # Registrar en historial
     _registrar_en_historial(context, user_text, "user")
@@ -781,15 +792,17 @@ async def handle_edicion_final(update: Update, context: ContextTypes.DEFAULT_TYP
     from servidor_mcp import run_orquestador
     
     mensaje_espera = await update.message.reply_text("🔄 Procesando cambios...")
-    response = await run_orquestador(context.user_data.get("historial", []))
+    
+    chat_id_actual = update.effective_chat.id
 
+    response = await run_orquestador(context.user_data["historial"], chat_id_original=chat_id_actual)
     _registrar_en_historial(context, response, "model")
 
     # Si el usuario está en CONFIRMACION_FINAL (modificando configuración)
     if "config" in context.user_data and "materiales" in context.user_data:
         # Resetear estado para evitar bloqueos
         from servidor_mcp import resetear_estado_recoleccion, obtener_datos_en_edicion
-        resetear_estado_recoleccion(CHAT_ID)
+        resetear_estado_recoleccion(chat_id_actual)
         
         # SOLUCIÓN: Obtener datos actualizados y compararlos con snapshot
         datos_actualizados = obtener_datos_en_edicion()
@@ -877,7 +890,7 @@ async def start_new(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_message = update.message.text
-    CHAT_ID = update.effective_chat.id
+    chat_id_actual = update.effective_chat.id
 
     logger.info("Mensaje recibido: %s", user_message)
 
@@ -890,7 +903,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         # Llamada al orquestador MCP con el historial completo
         from servidor_mcp import run_orquestador
-        result = await run_orquestador(context.user_data["historial"])
+        result = await run_orquestador(context.user_data["historial"], chat_id_original=chat_id_actual)
 
         # Normalizamos salida
         if isinstance(result, dict):
@@ -918,25 +931,25 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def callback_desde_mcp(mensaje: str, tipo: str, chat_id:int, **kwargs):
     """Función callback que programa tareas asíncronas"""
-    CHAT_ID = chat_id  # Usar el chat_id pasado como parámetro
+    chat_id_actual = chat_id  # Usar el chat_id pasado como parámetro
 
     try:
         loop = asyncio.get_event_loop()
         
         if tipo == 'iniciar_flujo_recoleccion':
-            loop.create_task(iniciar_recoleccion_datos())
-            logger.info("✅ Tarea de recolección programada")
+            loop.create_task(iniciar_recoleccion_datos(chat_id=chat_id_actual))
+            logger.info(f"✅ Tarea de recolección programada para chat_id={chat_id_actual}")
             
         elif tipo == 'resultado_final':
             # kwargs debería contener 'chat_id' si lo necesitas
-            chat_id_param = kwargs.get('chat_id', CHAT_ID)  # Usar global si no viene
+            chat_id_param = kwargs.get('chat_id', chat_id_actual)  # Usar global si no viene
             loop.create_task(enviar_mensaje_telegram(chat_id_param, mensaje))
             logger.info("✅ Mensaje programado")
             
         elif tipo == 'enviar_excel':
             archivo_bytes = kwargs.get('archivo_bytes')
             nombre_archivo = kwargs.get('nombre_archivo', 'tablero.xlsx')
-            chat_id_param = kwargs.get('chat_id', CHAT_ID)  # Usar global si no viene
+            chat_id_param = kwargs.get('chat_id', chat_id_actual)  # Usar global si no viene
             
             if not archivo_bytes:
                 logger.error("❌ No se recibió archivo_bytes")

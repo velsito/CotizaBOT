@@ -105,7 +105,6 @@ def get_tools_declarations():
                     parameters={
                         "type": "object",
                         "properties": {
-    
                             "chat_id": {
                                 "type": "string",
                                 "description": "ID del chat de Telegram donde se iniciará el proceso de recolección"
@@ -787,9 +786,9 @@ def deduplicate_detections(detections, threshold=30):
         
         if not is_duplicate:
             unique_elements.append(new_det)
-    return unique_elements
             
     return unique_elements
+
 
 async def analizar_esquema_unifilar(pdf_path: str) -> Dict[str, Any]:
     """
@@ -799,8 +798,7 @@ async def analizar_esquema_unifilar(pdf_path: str) -> Dict[str, Any]:
     from unifilar import (
         ConfiguracionProcesamiento, 
         ProcesadorEsquemaUnifilar, 
-        FragmentoImagen, 
-        consolidar_conteo
+        FragmentoImagen
     )
     import json
     import logging
@@ -856,6 +854,7 @@ async def analizar_esquema_unifilar(pdf_path: str) -> Dict[str, Any]:
         # ================================================================
         # 4. ANALIZAR FRAGMENTOS Y MAPEAR COORDENADAS
         # ================================================================
+        
         logger.info("🔍 Analizando fragmentos y mapeando coordenadas...")
         
         for idx, fragmento in enumerate(fragmentos, start=1):
@@ -915,6 +914,7 @@ async def analizar_esquema_unifilar(pdf_path: str) -> Dict[str, Any]:
         # ================================================================
         # 5. DEDUPLICACIÓN Y CONSOLIDACIÓN FINAL
         # ================================================================
+        
         logger.info(f"detecciones globales: {detecciones_globales}")
         logger.info("📊 Eliminando duplicados por proximidad espacial...")
         
@@ -939,10 +939,10 @@ async def analizar_esquema_unifilar(pdf_path: str) -> Dict[str, Any]:
         # ================================================================
         # 6. RESULTADO FINAL
         # ================================================================
+        
         tiempo_total = asyncio.get_event_loop().time() - inicio
         total_fragmentos = len(fragmentos)
         logger.info(f"✅ {total_fragmentos} fragmentos extraídos")
-        
         
         return {
             "status": "success",
@@ -968,20 +968,20 @@ async def iniciar_recoleccion_interactiva(chat_id: int):
     Inicia el flujo de recolección interactiva de datos
     Esta función NO ejecuta el dimensionamiento, solo inicia el flujo en Telegram
     """
+    if chat_id is None:
+        return "❌ Error: chat_id es None"
+    
     estado = obtener_estado(chat_id)
+    
+    logger.info(f"🔄 Iniciando recolección interactiva para chat_id={chat_id}")
+    logger.info(f"estados actuales: {estado}")
     if estado.en_proceso:
         return "⚠️ Ya hay un proceso de recolección en curso. Por favor, complétalo primero."
     
-    estado.en_proceso = True
-
     try:
         # Verificar que el callback esté registrado
         if not _callback_recoleccion:
             return "❌ Error: Sistema de recolección no inicializado. Contacta al administrador."
-        
-        # Verificar que no haya otro proceso en curso
-        if estado.en_proceso:
-            return "⚠️ Ya hay un proceso de recolección en curso. Por favor, complétalo primero."
         
         # Inicializar estado
         estado.en_proceso = True
@@ -991,8 +991,9 @@ async def iniciar_recoleccion_interactiva(chat_id: int):
         mensaje = "Vamos a dimensionar tu tablero eléctrico. Te haré algunas preguntas:"
         
         _callback_recoleccion(  # ejecuto la funcion de iniciar_recoleccion
-            chat_id=chat_id,
-            tipo='iniciar_flujo_recoleccion'
+            mensaje=mensaje,
+            tipo='iniciar_flujo_recoleccion',
+            chat_id=chat_id
         )
         
         logger.info(f"✅ Recolección iniciada")
@@ -1012,9 +1013,11 @@ async def _ejecutar_dimensionamiento_con_datos(datos: dict) -> str:
     Ejecuta el dimensionamiento con los datos ya recolectados
     llamada automáticamente cuando se completa la recolección
     """
-    query = datos.get('query')
-    update = datos.get('update')
-    CHAT_ID = update.effective_chat.id
+    # Obtener chat_id desde los datos (fue pasado desde bot.py)
+    chat_id_actual = datos.get('chat_id')
+    
+    if not chat_id_actual:
+        return "❌ Error: chat_id no disponible"
 
     try:
         config_input = datos.get('config_input')
@@ -1178,31 +1181,32 @@ async def _ejecutar_dimensionamiento_con_datos(datos: dict) -> str:
         # Enviar archivo por Telegram
         if _callback_recoleccion:
             excel_bytes = exportar_y_obtener_bytes(
-            gabinete=gabinete,              # ← Con nombres
-            listado_materiales=listado_materiales,
-            config=config,
-            rieles_usados=rieles_usados,
-            anchos_dif=anchos_dif,
-            anchos_term=anchos_term,
-            materiales_input=materiales_input
-        )
-        
-        _callback_recoleccion(
-            mensaje=resultado,               # ← También con nombres
-            tipo='enviar_excel',
-            archivo_bytes=excel_bytes,
-            nombre_archivo=f"Tablero_{gabinete.codigo}.xlsx"
-        )
+                gabinete=gabinete,
+                listado_materiales=listado_materiales,
+                config=config,
+                rieles_usados=rieles_usados,
+                anchos_dif=anchos_dif,
+                anchos_term=anchos_term,
+                materiales_input=materiales_input
+            )
+            
+            _callback_recoleccion(
+                mensaje=resultado,
+                tipo='enviar_excel',
+                chat_id=chat_id_actual,
+                archivo_bytes=excel_bytes,
+                nombre_archivo=f"Tablero_{gabinete.codigo}.xlsx"
+            )
         
         # Resetear estado global después de completar exitosamente
-        resetear_estado_recoleccion(CHAT_ID)
+        resetear_estado_recoleccion(chat_id_actual)
         
         return resultado
             
     except Exception as e:
         logger.exception("Error en dimensionamiento")
         # Resetear estado global también en caso de error
-        resetear_estado_recoleccion()
+        resetear_estado_recoleccion(chat_id_actual)
         return f"❌ Error: {str(e)}"
 
 
@@ -1222,14 +1226,6 @@ def exportar_a_excel(
     Returns:
         str: Ruta del archivo generado
     """
-    
-    # # Generar nombre único con timestamp
-    # timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")  
-    # nombre_archivo = OUTPUT_DIR / f"Tablero_{gabinete.codigo}_{timestamp}.xlsx"
-    
-    # if not os.path.exists(OUTPUT_DIR):
-    #     os.makedirs(OUTPUT_DIR, mode=0o777, exist_ok=True)
-    #     logger.info(f"📁 Carpeta {OUTPUT_DIR} creada con éxito.")
     
     nombre_archivo_base = f"Tablero_{gabinete.codigo}.xlsx"
         
@@ -1776,7 +1772,7 @@ async def actualizar_datos(
         logger.exception("❌ Error al actualizar datos")
         return f"❌ Error al actualizar datos: {str(e)}"
 
-async def run_mcp(question:str) -> str:
+async def run_mcp(question:str, chat_id_original=None) -> str:
 
     """
     Procesa una pregunta usando Gemini con function calling
@@ -1838,8 +1834,7 @@ async def run_mcp(question:str) -> str:
                     
                     # Llamar la función con los argumentos correctos
                     if func_name == "iniciar_recoleccion_interactiva":
-                        chat_id = func_args.get("chat_id") # opcional
-                        result = await func(chat_id=chat_id)
+                        result = await func(chat_id=chat_id_original)
                     elif func_name == "buscar_seleccionador":
                         result = func(referencia=func_args.get("referencia"))
                     elif func_name == "listar_gabinetes_disponibles":
@@ -1882,11 +1877,11 @@ async def run_mcp(question:str) -> str:
         return f"❌ Error: {type(e).__name__}: {str(e)}"
 
 
-async def run_orquestador(question: str) -> str:
+async def run_orquestador(question: str, chat_id_original=None) -> str:
     """
     Punto de entrada desde el bot de Telegram
     """
-    return await run_mcp(question)
+    return await run_mcp(question, chat_id_original=chat_id_original)
 
 
 # === ASIGNAR FUNCIONES AL MAPA ===
