@@ -113,7 +113,7 @@ async def reutilizar_ultima(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Resetear estado global para evitar "proceso en curso"
     from servidor_mcp import resetear_estado_recoleccion
-    resetear_estado_recoleccion()
+    resetear_estado_recoleccion(CHAT_ID)
     
     # Inicializar si no existen
     if "config" not in context.user_data:
@@ -534,7 +534,7 @@ async def confirmacion_final(update: Update, context: ContextTypes.DEFAULT_TYPE)
         
         # Resetear estado global en servidor_mcp
         from servidor_mcp import resetear_estado_recoleccion
-        resetear_estado_recoleccion()
+        resetear_estado_recoleccion(CHAT_ID)
         
         context.user_data.clear()
         return ConversationHandler.END
@@ -543,7 +543,7 @@ async def confirmacion_final(update: Update, context: ContextTypes.DEFAULT_TYPE)
         from servidor_mcp import resetear_estado_recoleccion, guardar_datos_en_edicion
         
         # Resetear el estado para que el orquestador esté limpio
-        resetear_estado_recoleccion()
+        resetear_estado_recoleccion(CHAT_ID)
         
         config_actual = context.user_data.get("config", {})
         materiales_actuales = context.user_data.get("materiales", [])
@@ -615,7 +615,7 @@ async def confirmacion_final(update: Update, context: ContextTypes.DEFAULT_TYPE)
         
         # Resetear estado global también en caso de error
         from servidor_mcp import resetear_estado_recoleccion
-        resetear_estado_recoleccion()
+        resetear_estado_recoleccion(CHAT_ID)
         
         ultima_config_guardada = None
 
@@ -734,6 +734,9 @@ def crear_bot_application(token: str):
 async def cancelar(update: Update, context: ContextTypes.DEFAULT_TYPE): # fallback para salir de la operación de dimensionamiento
     """Cancela y finaliza la conversación actual."""
     # 1. Limpiamos los datos temporales de la recolección
+    CHAT_ID = update.effective_chat.id
+
+    
     context.user_data.pop("config", None)
     context.user_data.pop("materiales", None)
     context.user_data.pop("material_temp", None)
@@ -741,7 +744,7 @@ async def cancelar(update: Update, context: ContextTypes.DEFAULT_TYPE): # fallba
     context.user_data.pop("historial", None)
 
     from servidor_mcp import resetear_estado_recoleccion
-    resetear_estado_recoleccion()
+    resetear_estado_recoleccion(CHAT_ID)
 
     # 2. Informamos al usuario
     texto = "🚫 <b>Proceso cancelado.</b>\n\nHe limpiado los datos de este dimensionamiento. ¿En qué más puedo ayudarte?"
@@ -757,7 +760,8 @@ async def cancelar(update: Update, context: ContextTypes.DEFAULT_TYPE): # fallba
 
 async def handle_edicion_final(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_text = update.message.text
-    
+    CHAT_ID = update.effective_chat.id
+
     # Registrar en historial
     _registrar_en_historial(context, user_text, "user")
 
@@ -785,7 +789,7 @@ async def handle_edicion_final(update: Update, context: ContextTypes.DEFAULT_TYP
     if "config" in context.user_data and "materiales" in context.user_data:
         # Resetear estado para evitar bloqueos
         from servidor_mcp import resetear_estado_recoleccion, obtener_datos_en_edicion
-        resetear_estado_recoleccion()
+        resetear_estado_recoleccion(CHAT_ID)
         
         # SOLUCIÓN: Obtener datos actualizados y compararlos con snapshot
         datos_actualizados = obtener_datos_en_edicion()

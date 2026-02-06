@@ -1012,6 +1012,10 @@ async def _ejecutar_dimensionamiento_con_datos(datos: dict) -> str:
     Ejecuta el dimensionamiento con los datos ya recolectados
     llamada automáticamente cuando se completa la recolección
     """
+    query = datos.get('query')
+    update = datos.get('update')
+    CHAT_ID = update.effective_chat.id
+
     try:
         config_input = datos.get('config_input')
         materiales_input = datos.get('materiales_input')
@@ -1191,7 +1195,7 @@ async def _ejecutar_dimensionamiento_con_datos(datos: dict) -> str:
         )
         
         # Resetear estado global después de completar exitosamente
-        resetear_estado_recoleccion()
+        resetear_estado_recoleccion(CHAT_ID)
         
         return resultado
             
