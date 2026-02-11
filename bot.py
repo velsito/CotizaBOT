@@ -3,6 +3,9 @@ import logging
 from dotenv import load_dotenv
 import asyncio
 from pathlib import Path
+import http.server
+import socketserver
+import threading
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from servidor_mcp import registrar_callback_recoleccion
@@ -13,7 +16,8 @@ from telegram.ext import (
     ContextTypes,
     filters,
     ConversationHandler,
-    CallbackQueryHandler
+    CallbackQueryHandler,
+    ApplicationBuilder
 )
 
 EXCEL_OUTPUT_DIR = os.getenv("EXCEL_OUTPUT", "./resultados/")
@@ -29,6 +33,30 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+
+
+###
+class HealthCheckHandler(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-type", "text/html")
+        self.end_headers()
+        self.wfile.write(b"Bot is running!")
+    
+    # Esto es para que el log no se llene de basura de pings
+    def log_message(self, format, *args):
+        return
+
+def run_health_server():
+    # Render nos obliga a usar el puerto que ellos digan
+    port = int(os.environ.get("PORT", 10000))
+    with socketserver.TCPServer(("0.0.0.0", port), HealthCheckHandler) as httpd:
+        print(f"🌍 Servidor de Health Check corriendo en el puerto {port}")
+        httpd.serve_forever()
+###
+
+
 
 # Almacenamiento persistente de última configuración por chat_id
 ultima_config_storage = {} # lo uso para almacenar los inputs de config y materiales que se usan en el dimensionamiento
@@ -1088,7 +1116,7 @@ async def handle_pdf(update: Update, context: ContextTypes.DEFAULT_TYPE): # LLAM
 
 async def main():
     logger.info("Iniciando bot de Telegram...")
-
+    threading.Thread(target = run_health_server, daemon=True).start()
     registrar_callback_recoleccion(callback_desde_mcp)
 
     app = crear_bot_application(TELEGRAM_TOKEN) # referencia al bot
@@ -1109,7 +1137,7 @@ async def main():
     
     try:
         while True:
-            await asyncio.sleep(3600)
+            await asyncio.sleep(1)
     except (KeyboardInterrupt, SystemExit):
             await app.stop()
             await app.shutdown()
