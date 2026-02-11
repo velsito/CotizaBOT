@@ -990,27 +990,31 @@ async def handle_pdf(update: Update, context: ContextTypes.DEFAULT_TYPE): # LLAM
     try:
         # 1. Descargar PDF en un directorio temporal escribible
         import tempfile, time
+        documento = update.message.document
+        file_name = documento.file_name
 
-        documento = update.message.document  # documento enviado por telegram
-        file_name = Path(documento.file_name).name
-
-        logger.info(f"📥 PDF recibido: {file_name}")
-
-        # Usar el directorio temporal del sistema (p. ej. /tmp en Render)
+        temp_root = Path(tempfile.gettempdir())
         temp_dir = Path(tempfile.gettempdir()) / "cotizabot"
+
+
         try:
             temp_dir.mkdir(parents=True, exist_ok=True)
+            os.chmod(temp_dir, 0o777)  # Asegurar permisos de escritura
         except Exception as e:
             logger.error(f"No se pudo crear temp_dir {temp_dir}: {e}")
-            temp_dir = Path(".")  # fallback al directorio actual
+            temp_dir = temp_root  # fallback al directorio actual
 
-        file = await documento.get_file()
-        path_local = temp_dir / file_name
+        file_base = file_name.replace(" ", "_")
+        file_clean = "".join(c for c in file_base if c.isalnum() or c in ("_", "-"))
 
-        # Evitar sobrescribir archivos existentes: añadir timestamp si ya existe
+        path_local = temp_dir / f"{int(time.time())}_{file_clean}"
+        
+        
         if path_local.exists():
-            path_local = temp_dir / f"{int(time.time())}_{file_name}"
+            path_local = temp_dir / f"{int(time.time())}_{file_clean}"
 
+        logger.info(f"📥 PDF recibido: {file_name}")
+        file = await documento.get_file()
         await update.message.reply_text("📥 Descargando PDF...")
         await file.download_to_drive(str(path_local))
 
@@ -1026,7 +1030,7 @@ async def handle_pdf(update: Update, context: ContextTypes.DEFAULT_TYPE): # LLAM
         from servidor_mcp import analizar_esquema_unifilar
         
         # IMPORTANTE: Pasar la ruta completa como string
-        resultado = await analizar_esquema_unifilar(str(path_local))
+        resultado = await analizar_esquema_unifilar(str(path_local.absolute()))
         
         # 3. Formatear y enviar resultado
         if resultado.get("status") == "success":

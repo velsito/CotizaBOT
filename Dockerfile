@@ -3,6 +3,7 @@ FROM python:3.11-slim
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y libgl1 libglib2.0-0 poppler-utils build-essential && rm -rf /var/liub/apt/lists/*
+RUN mkdir -p /app/data && chmod 777 /app/data
 
 # Evita archivos .pyc y mejora logs
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -24,7 +25,7 @@ ENV PATH="/home/user/.local/bin:${PATH}"
 # Copiamos el resto del código
 COPY . .
 
-EXPOSE 10000
+RUN chmod -R 777 /app/data
 
 # Comando de arranque
 CMD ["python", "bot.py"]
