@@ -892,7 +892,7 @@ def exportar_a_excel(
     
     ruta_final = temp_dir / solo_nombre
     
-    logger.info(f"📝 Intentando escribir Excel en ruta segura: {ruta_fina
+    logger.info(f"📝 Intentando escribir Excel en ruta segura: {ruta_final}")
     
     try:
         with pd.ExcelWriter(ruta_final, engine='openpyxl') as writer:
