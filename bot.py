@@ -129,7 +129,7 @@ async def iniciar_recoleccion_datos(update: Update = None, context: ContextTypes
         chat_id=chat_id_actual,
         text=(
             "🔧 <b> Dimensionador de Tableros Eléctricos </b>\n\n"
-            "Paso 1/5: Selecciona el <b>Seleccionador de Referencia</b>:"
+            "Paso 1/5: Selecciona el <b>Seleccionador de Referencia</b>:\n"
             "Voy a recolectar los datos necesarios para el dimensionamiento.\n\n"
         ),
         reply_markup=reply_markup,
@@ -582,7 +582,7 @@ async def confirmacion_final(update: Update, context: ContextTypes.DEFAULT_TYPE)
         from servidor_mcp import resetear_estado_recoleccion, guardar_datos_en_edicion
         
         # Resetear el estado para que el orquestador esté limpio
-        resetear_estado_recoleccion(CHAT_ID)
+        resetear_estado_recoleccion(chat_id_actual)
         
         config_actual = context.user_data.get("config", {})
         materiales_actuales = context.user_data.get("materiales", [])
