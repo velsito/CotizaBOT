@@ -5,11 +5,11 @@ from datetime import datetime
 import pandas as pd
 from io import BytesIO
 from typing import List, Dict
-import json
 from typing import List, Dict, Any
-import fitz
 import math
 import copy
+import tempfile
+import os
 
 # Configuración de Gemini API
 import os
@@ -873,19 +873,28 @@ def exportar_a_excel(
     """
     Exporta los resultados del dimensionamiento a un archivo Excel con múltiples hojas
     
-    Returns:
-        str: Ruta del archivo generado
     """
     
-    nombre_archivo_base = f"Tablero_{gabinete.codigo}.xlsx"
-        
-    solo_nombre = os.path.basename(nombre_archivo_base)
-    ruta_final = os.path.join("resultados", solo_nombre)
-        
-    logger.info(f"📝 Intentando escribir Excel en: {ruta_final}")
-        
+    temp_dir = Path(tempfile.gettempdir()) / "cotizabot_resultados"
+                    
     try:
         # Crear escritor de Excel
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        os.chmod(temp_dir, 0o777)
+    except Exception as e:
+        logger.warning("no se pudo crear carpeta temporal")
+        temp_dir = Path(tempfile.gettempdir())  # fallback a temp sin subcarpeta
+    
+    nombre_archivo_base = f"Tablero_{gabinete.codigo}.xlsx"
+    solo_nombre = os.path.basename(nombre_archivo_base)
+    # Reemplazamos espacios por guiones para evitar problemas de rutas en Linux
+    solo_nombre = solo_nombre.replace(" ", "_")
+    
+    ruta_final = temp_dir / solo_nombre
+    
+    logger.info(f"📝 Intentando escribir Excel en ruta segura: {ruta_fina
+    
+    try:
         with pd.ExcelWriter(ruta_final, engine='openpyxl') as writer:
             
             # === HOJA 1: RESUMEN DEL PROYECTO ===
@@ -918,11 +927,11 @@ def exportar_a_excel(
             df_entrada = pd.DataFrame(materiales_input)
             df_entrada.to_excel(writer, sheet_name='Materiales_Solicitados', index=False)
         
-        logger.info(f"✅ Excel generado: {ruta_final}")
+        logger.info(f"✅ Excel generado exitosamente en: {ruta_final}")
         return str(ruta_final)
         
     except Exception as e:
-        logger.error(f"❌ Error generando Excel: {e}")
+        logger.error(f"❌ Error generando Excel en {ruta_final}: {e}")
         raise 
 
 
