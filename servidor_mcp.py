@@ -4,14 +4,11 @@ import datetime
 from datetime import datetime
 import pandas as pd
 from io import BytesIO
-from typing import List, Dict
 from typing import List, Dict, Any
 import math
 import copy
 import tempfile
-import os
 
-# Configuración de Gemini API
 import os
 from google import genai
 from google.genai import types
@@ -264,7 +261,8 @@ FUNCTION_MAP = {
 
 # === IMPLEMENTACIÓN DE LAS FUNCIONES ===
 
-PROMPT_ANALISIS =  """ Actúa como un sistema experto en visión artificial para la industria eléctrica. Tu objetivo es identificar, clasificar y localizar componentes en fragmentos de planos unifilares para un sistema de cotización automática.
+PROMPT_ANALISIS =  """ Actúa como un sistema experto en visión artificial para la industria eléctrica. Tu objetivo es identificar, clasificar y localizar componentes en fragmentos de planos 
+unifilares para un sistema de cotización automática.
 
 Reglas de Localización:
 Sistema de Coordenadas: Utiliza un plano de 0 a 1000 para ambos ejes (X e Y).
@@ -272,11 +270,11 @@ Punto de Origen: El punto (0,0) es la esquina superior izquierda del fragmento d
 Centro Geométrico: Debes calcular las coordenadas x e y basándote en el centro exacto del símbolo gráfico del componente detectado.
 
 Consideraciones:
+- Por cada ícono de fusible y de luminaria, DEBES CONTAR 3 ELEMENTOS por símbolo individual correspondiente. 
 - Para componentes sin etiquetas (como luminarias y fusibles), guiate por su forma geométrica:
-  Luminarias: "Detectar círculos que contengan una 'X' interna. Ignorar si la 'X' está fuera del círculo. Contabilizar cada aparición como una unidad de material aunque no posea etiqueta".
+  Luminarias: "Detectar círculos que contengan una 'X' interna. Ignorar si la 'X' está fuera del círculo".
   Fusibles: "Detectar rectángulos estrechos atravesados por una línea longitudinal continua. No confundir con cables de conexión; el fusible siempre tiene un borde cerrado".
 - Para cada componente sin etiqueta detectado, asigná un ID virtual siguiendo el esquema TIPO-COORDENADA. Ejemplo: LUM-250-400. Esto permitirá que el proceso de deduplicación lo trate como un objeto único y real.
-- Por cada ícono de fusible y de luminaria, DEBES CONTAR 3 ELEMENTOS por cada símbolo individual correspondiente. 
 
 Símbolos a identificar:
 1. Térmica (Interruptor Automático)
@@ -284,6 +282,9 @@ Estructura principal: Una línea vertical interrumpida por un segmento diagonal 
 Rasgo distintivo superior: En el extremo de la línea superior, hay una pequeña "X" o asterisco. Justo 
 encima de la "X", hay un guion horizontal corto. Rasgo distintivo inferior: El extremo del brazo diagonal 
 termina en una forma de "escalera" o gancho con dos ángulos rectos.
+Forma alternativa:
+En algunos casos, la parte superior puede no presentar la "x", y en su lugar, el brazo diagonal puede terminar directamente en la forma de escalera, con solo un ángulo recto debajo.
+
 Identificador: suele ir acompañado de TM y el número de térmica, y el amperaje, o de solo alguno de esos dos valores.
 Ejemplo: -TM4 2x16A 
 

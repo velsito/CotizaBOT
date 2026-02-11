@@ -998,7 +998,7 @@ def callback_desde_mcp(mensaje: str, tipo: str, chat_id:int, **kwargs):
         traceback.print_exc()
 
 async def enviar_mensaje_telegram(chat_id:int, texto:str):
-    bot_application.send_message(chat_id=chat_id, text=texto, parse_mode="Markdown")
+    bot_application.send_message(chat_id=chat_id, text=texto, parse_mode="HTML")
     return
 
 async def enviar_archivo_telegram(chat_id:int, contenido_bytes:bytes, nombre_archivo: str="dimensionamiento.xlsx"):
@@ -1036,7 +1036,6 @@ async def handle_pdf(update: Update, context: ContextTypes.DEFAULT_TYPE): # LLAM
         file_clean = "".join(c for c in file_base if c.isalnum() or c in ("_", "-"))
 
         path_local = temp_dir / f"{int(time.time())}_{file_clean}"
-        
         
         if path_local.exists():
             path_local = temp_dir / f"{int(time.time())}_{file_clean}"
