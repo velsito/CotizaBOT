@@ -1,4 +1,13 @@
-resultados/
+# Archivos temporales de Excel 
+~$*
+.DS_Store
 __pycache__/
+*.tmp
+
+# Carpetas de datos locales
+resultados/
+temp_pdf/
+
+# Entorno
 .env
-.git
+.git/

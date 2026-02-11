@@ -1,11 +1,11 @@
 import os
 import logging
-from servidor_mcp import registrar_callback_recoleccion
 from dotenv import load_dotenv
 import asyncio
 from pathlib import Path
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from servidor_mcp import registrar_callback_recoleccion
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -117,7 +117,7 @@ async def reutilizar_ultima(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     # Recuperar desde almacenamiento persistente
-    datos_viejos = ultima_config_storage.get(CHAT_ID)
+    datos_viejos = ultima_config_storage.get(chat_id_actual)
     if not datos_viejos:
         await query.edit_message_text("❌ No hay configuración anterior disponible.")
         return ConversationHandler.END
