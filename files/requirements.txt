@@ -1,0 +1,15 @@
+# CotizaBOT - Template Matching Dependencies
+# Sistema de detección de componentes eléctricos en planos PDF
+
+# Computer Vision
+opencv-python==4.8.1.78
+numpy==1.24.3
+
+# PDF Processing
+PyMuPDF==1.23.8
+
+# Optional: Para visualización avanzada
+matplotlib==3.8.2
+
+# Optional: Para desarrollo y testing
+pytest==7.4.3
