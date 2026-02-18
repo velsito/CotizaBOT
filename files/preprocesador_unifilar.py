@@ -7,6 +7,7 @@ Extrae solo la sección unifilar (mitad inferior) de PDFs que combinan topográf
 import pdfplumber
 from pathlib import Path
 from pypdf import PdfReader, PdfWriter
+from pypdf.generic import RectangleObject
 import tempfile
 
 class PreprocesadorUnifilar:
@@ -57,24 +58,37 @@ class PreprocesadorUnifilar:
             media_box = page.mediabox
             ancho_orig = float(media_box.width)
             alto_orig = float(media_box.height)
-            
-            if orientacion['es_vertical']:
+
+            # Detectar orientación por página (más robusto que usar solo la primera página)
+            es_vertical_pagina = alto_orig > ancho_orig
+
+            if es_vertical_pagina:
                 # PDF VERTICAL: TOPOGRÁFICO arriba, UNIFILAR abajo
                 print(f"      ℹ️  PDF en VERTICAL")
-                print(f"      🔄 Rotando 270° y extrayendo unifilar...")
-                
-                # Estrategia: Primero extraer la mitad inferior, LUEGO rotar
+                print(f"      🔄 Rotando a horizontal y extrayendo unifilar (mitad inferior)...")
+
+                # Recortar la mitad inferior en coordenadas originales (altura)
                 mitad_alto = alto_orig / 2
-                
-                # Extraer mitad inferior (unifilar) ANTES de rotar
-                page.mediabox.lower_left = (0, 0)
-                page.mediabox.upper_right = (ancho_orig, mitad_alto)
-                
-                # AHORA rotar
-                page.rotate(270)
-                
-                print(f"      ✅ Extraído mitad inferior y rotado 270°")
-                print(f"      📐 Resultado: {mitad_alto:.1f} x {ancho_orig:.1f} (horizontal)")
+                box = RectangleObject([0, 0, float(ancho_orig), float(mitad_alto)])
+                try:
+                    page.cropbox = box
+                except Exception:
+                    try:
+                        page.mediabox = box
+                    except Exception:
+                        pass
+
+                # Ahora rotar 270° para ponerlo en horizontal (mantener lectura)
+                try:
+                    page.rotate_clockwise(270)
+                except Exception:
+                    try:
+                        page.rotate(270)
+                    except Exception:
+                        pass
+
+                print(f"      ✅ Extraída mitad inferior y rotado 270°")
+                print(f"      📐 Resultado aproximado: {ancho_orig:.1f} x {mitad_alto:.1f} (antes de rotación)")
                 
             else:
                 # PDF HORIZONTAL: TOPOGRÁFICO izquierda, UNIFILAR derecha
@@ -82,10 +96,16 @@ class PreprocesadorUnifilar:
                 print(f"      ℹ️  PDF en HORIZONTAL")
                 print(f"      ✂️  Extrayendo mitad inferior (unifilar)...")
                 
-                # Para PDF horizontal, asumimos división vertical (arriba/abajo)
+                # Para PDF horizontal, asumimos división arriba/abajo: recortar por altura
                 mitad_alto = alto_orig / 2
-                page.mediabox.lower_left = (0, 0)
-                page.mediabox.upper_right = (ancho_orig, mitad_alto)
+                box = RectangleObject([0, 0, float(ancho_orig), float(mitad_alto)])
+                try:
+                    page.cropbox = box
+                except Exception:
+                    try:
+                        page.mediabox = box
+                    except Exception:
+                        pass
                 
                 print(f"      ✅ Extraído mitad inferior")
                 print(f"      📐 Resultado: {ancho_orig:.1f} x {mitad_alto:.1f}")

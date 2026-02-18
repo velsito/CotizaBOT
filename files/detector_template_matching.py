@@ -12,9 +12,8 @@ import json
 from collections import defaultdict
 import tempfile
 
-# Importar preprocesador
 try:
-    from preprocesador_unifilar import PreprocesadorUnifilar
+    from preprocesador_unifilar import PreprocesadorUnifilar # preprocesador para rotar y extraer unifilar
     PREPROCESADOR_DISPONIBLE = True
 except ImportError:
     PREPROCESADOR_DISPONIBLE = False
