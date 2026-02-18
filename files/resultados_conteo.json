@@ -1,0 +1,177 @@
+{
+  "pdf": "C:\\Users\\TOMS~1\\AppData\\Local\\Temp\\unifilar_procesado_topo.pdf",
+  "resumen": {
+    "termicas": 10,
+    "luminaria": 1,
+    "fusibles": 3,
+    "disyuntores": 4,
+    "guardamotor": 0,
+    "seccionador": 1,
+    "contactor": 0,
+    "fotocelula": 0
+  },
+  "total_elementos": 19,
+  "detalle": {
+    "termicas": [
+      {
+        "id": "TM1",
+        "texto_completo": "-TM1",
+        "pagina": 1,
+        "posicion": [
+          -314.06,
+          638.7
+        ]
+      },
+      {
+        "id": "TM2",
+        "texto_completo": "-TM2",
+        "pagina": 1,
+        "posicion": [
+          -257.54,
+          638.82
+        ]
+      },
+      {
+        "id": "TM5",
+        "texto_completo": "-TM5",
+        "pagina": 1,
+        "posicion": [
+          -89.31,
+          638.7
+        ]
+      },
+      {
+        "id": "TM6",
+        "texto_completo": "-TM6",
+        "pagina": 1,
+        "posicion": [
+          -32.91,
+          638.82
+        ]
+      },
+      {
+        "id": "TM7",
+        "texto_completo": "-TM7",
+        "pagina": 1,
+        "posicion": [
+          23.37,
+          638.7
+        ]
+      },
+      {
+        "id": "TM3",
+        "texto_completo": "-TM3",
+        "pagina": 1,
+        "posicion": [
+          -201.38,
+          638.94
+        ]
+      },
+      {
+        "id": "TM8",
+        "texto_completo": "-TM8",
+        "pagina": 1,
+        "posicion": [
+          79.41,
+          638.7
+        ]
+      },
+      {
+        "id": "TM9",
+        "texto_completo": "-TM9",
+        "pagina": 1,
+        "posicion": [
+          135.57,
+          638.7
+        ]
+      },
+      {
+        "id": "TM10",
+        "texto_completo": "-TM10",
+        "pagina": 1,
+        "posicion": [
+          191.66,
+          638.7
+        ]
+      },
+      {
+        "id": "TM4",
+        "texto_completo": "-TM4",
+        "pagina": 1,
+        "posicion": [
+          -145.46,
+          638.7
+        ]
+      }
+    ],
+    "disyuntores": [
+      {
+        "texto": "30mA",
+        "pagina": 1,
+        "posicion": [
+          -204.27,
+          571.74
+        ]
+      },
+      {
+        "texto": "30mA",
+        "pagina": 1,
+        "posicion": [
+          -6.87,
+          571.74
+        ]
+      },
+      {
+        "texto": "30mA",
+        "pagina": 1,
+        "posicion": [
+          161.48,
+          571.62
+        ]
+      },
+      {
+        "texto": "30mA",
+        "pagina": 1,
+        "posicion": [
+          273.8,
+          571.62
+        ]
+      }
+    ],
+    "seccionador": [
+      {
+        "texto": "INS",
+        "pagina": 1,
+        "posicion": [
+          -47.18,
+          511.39
+        ]
+      }
+    ],
+    "fusibles": [
+      {
+        "texto": "2Ax3",
+        "cantidad": 3,
+        "amperaje": "2A",
+        "pagina": 1,
+        "posicion": [
+          -1.71,
+          527.41
+        ],
+        "metodo": "patron_NAxM"
+      }
+    ],
+    "luminaria": [
+      {
+        "texto": "(R)",
+        "cantidad": 1,
+        "pagina": 1,
+        "posicion": [
+          27.24,
+          523.63
+        ],
+        "metodo": "simbolo_R"
+      }
+    ]
+  }
+}
