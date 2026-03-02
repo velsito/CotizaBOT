@@ -896,7 +896,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "Hola. Soy el asistente de cotizaciones.\n"
         "Podés hacerme consultas sobre cotizaciones y tableros eléctricos, o puedes enviarme un pdf de un unifilar.\n"
-        "Para comenzar, probá con el comando /help."
+        "Para comenzar, probá con el comando /help. "
         "Para cancelar una operación en curso, escribí el comando /cancelar."
     )
 
@@ -910,6 +910,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• Busca el seleccionador S750\n\n"
         "🔧 Dimensionamiento:\n"
         "• Quiero dimensionar un tablero eléctrico\n"
+        " Esquemas unifilares:\n"
+        "• Envíame un pdf de un esquema unifilar y te ayudaré a contabilizar los materiales dentro del mismo"
     )
 
 async def start_new(update: Update, context: ContextTypes.DEFAULT_TYPE):
