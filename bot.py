@@ -7,6 +7,15 @@ import http.server
 import socketserver
 import threading
 
+### yolo
+import cv2
+from pdf2image import convert_from_path
+from ultralytics import YOLO
+import numpy as np
+model_path = "data\best.pt"
+model = YOLO(model_path)
+###
+
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from servidor_mcp import registrar_callback_recoleccion
 from telegram.ext import (
@@ -1114,6 +1123,63 @@ async def handle_pdf(update: Update, context: ContextTypes.DEFAULT_TYPE): # LLAM
             f"❌ <b>Error Crítico en Servidor</b>\n\n{str(e)}",
             parse_mode="HTML"
         )
+
+### IMPLEMENTACION CON YOLOV5 Y SLICING MANUAL (SIN PASAR POR EL ORQUESTADOR, SOLO PARA CONTEO DE MATERIALES EN PDF)
+
+def procesar_plano_con_slicing(img_bgr, slice_size=1024):
+    # Convertir a RGB para que el modelo reconozca los patrones de entrenamiento
+    img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+    h, w = img_rgb.shape[:2]
+    conteo_local = {}
+    
+    # Parámetros de ventana deslizante
+    stride = int(slice_size * 0.8) # 20% de solapamiento
+    
+    for y in range(0, h, stride):
+        for x in range(0, w, stride):
+            # Extraer fragmento
+            tile = img_rgb[y:y+slice_size, x:x+slice_size]
+            
+            # Inferencia (imgsz debe coincidir con tu entrenamiento de 1024)
+            results = model.predict(source=tile, imgsz=1024, conf=0.4, verbose=False)
+            
+            for r in results:
+                for box in r.boxes:
+                    clase = model.names[int(box.cls)]
+                    conteo_local[clase] = conteo_local.get(clase, 0) + 1
+                    
+    return conteo_local
+
+async def handle_pdf2(update, context):
+    file = await context.bot.get_file(update.message.document.file_id)
+    pdf_path = f"temp_{update.message.document.file_name}"
+    await file.download_to_drive(pdf_path)
+
+    # A. Convertir PDF a Imagen (Alta resolución para no perder detalle)
+    # Usamos 300 DPI para mantener la escala de Ingeniería SIE
+    images = convert_from_path(pdf_path, dpi=300)
+    
+    total_materiales = {}
+
+    for i, image in enumerate(images):
+        # Convertir PIL image a formato OpenCV (BGR)
+        open_cv_image = np.array(image)
+        img_bgr = open_cv_image[:, :, ::-1].copy() 
+        
+        # B. Aplicar Slicing Manual (ventana deslizante de 1024px)
+        detecciones_pagina = procesar_plano_con_slicing(img_bgr)
+        
+        # C. Sumar resultados al conteo global
+        for material, cantidad in detecciones_pagina.items():
+            total_materiales[material] = total_materiales.get(material, 0) + cantidad
+
+    # D. Enviar respuesta al usuario
+    mensaje_final = "📊 **Resumen de Materiales Detectados:**\n"
+    for mat, cant in total_materiales.items():
+        mensaje_final += f"• {mat.capitalize()}: {cant}\n"
+    
+    await update.message.reply_text(mensaje_final, parse_mode='Markdown')
+    os.remove(pdf_path) # Limpieza
 
 async def main():
     logger.info("Iniciando bot de Telegram...")
