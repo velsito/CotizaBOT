@@ -7,13 +7,11 @@ import http.server
 import socketserver
 import threading
 
-### yolo
-import cv2
-from pdf2image import convert_from_path
-from ultralytics import YOLO
+### 
+import tempfile
 import numpy as np
-model_path = "data\best.pt"
-model = YOLO(model_path)
+from pdf2image import convert_from_path
+import gc
 ###
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -1024,162 +1022,62 @@ async def enviar_archivo_telegram(chat_id:int, contenido_bytes:bytes, nombre_arc
     except Exception as e:
         logger.error(f"Error enviando archivo a chat_id {chat_id}: {e}")
 
-async def handle_pdf(update: Update, context: ContextTypes.DEFAULT_TYPE): # LLAMADA DIRECTA A LA TOOL SIN PASAR POR EL ORQUESTADOR
+def handle_pdf(pdf_path, analyzer):
+    # Estructura: {'Material': {'total': 0, 'paginas': set()}}
+    registro_materiales = {}
+    paginas_totales = 0
     
-    try:
-        # 1. Descargar PDF en un directorio temporal escribible
-        import tempfile, time
-        documento = update.message.document
-        file_name = documento.file_name
-
-        temp_root = Path(tempfile.gettempdir())
-        temp_dir = Path(tempfile.gettempdir()) / "cotizabot"
-
-
+    with tempfile.TemporaryDirectory() as temp_dir:
         try:
-            temp_dir.mkdir(parents=True, exist_ok=True)
-            os.chmod(temp_dir, 0o777)  # Asegurar permisos de escritura
+            # Convertimos a rutas de archivos para no saturar RAM
+            images = convert_from_path(
+                pdf_path, 
+                dpi=300, 
+                output_folder=temp_dir, 
+                fmt="png",
+                paths_only=True 
+            )
+            paginas_totales = len(images)
         except Exception as e:
-            logger.error(f"No se pudo crear temp_dir {temp_dir}: {e}")
-            temp_dir = temp_root  # fallback al directorio actual
+            return f"❌ Error en conversión: {str(e)}", None
 
-        file_base = file_name.replace(" ", "_")
-        file_clean = "".join(c for c in file_base if c.isalnum() or c in ("_", "-"))
+        for i, page_path in enumerate(images):
+            num_pagina = i + 1 # Página humana (1, 2, 3...)
+            detecciones, _ = analyzer.predict(page_path)
+            
+            for d in detecciones:
+                clase = d.category.name
+                
+                # Inicializamos si es la primera vez que vemos este material
+                if clase not in registro_materiales:
+                    registro_materiales[clase] = {"total": 0, "paginas": set()}
+                
+                # Sumamos uno al total y agregamos el número de página al set
+                registro_materiales[clase]["total"] += 1
+                registro_materiales[clase]["paginas"].add(num_pagina)
+            
+            # Limpieza post-página
+            gc.collect()
 
-        path_local = temp_dir / f"{int(time.time())}_{file_clean}"
-        
-        if path_local.exists():
-            path_local = temp_dir / f"{int(time.time())}_{file_clean}"
+    # --- CONSTRUCCIÓN DEL REPORTE DETALLADO ---
+    if not registro_materiales:
+        return f"⚠️ No se detectaron materiales en las {paginas_totales} páginas.", None
 
-        logger.info(f"📥 PDF recibido: {file_name}")
-        file = await documento.get_file()
-        await update.message.reply_text("📥 Descargando PDF...")
-        await file.download_to_drive(str(path_local))
-
-        logger.info(f"✅ PDF guardado temporalmente en: {path_local}")
-        
-        # 2. Analizar directamente
-        mensaje_progreso = await update.message.reply_text(
-            "🔍 Analizando esquema unifilar...\n"
-            "Esto puede tomar algunos minutos."
-        )
-        
-        # Importar la función de análisis
-        from servidor_mcp import analizar_esquema_unifilar
-        
-        # IMPORTANTE: Pasar la ruta completa como string
-        resultado = await analizar_esquema_unifilar(str(path_local.absolute()))
-        
-        # 3. Formatear y enviar resultado
-        if resultado.get("status") == "success":
-            materiales = resultado.get("conteo_materiales", {})
-            stats = resultado.get("metadatos", {})
-            
-            respuesta = (
-                f"✅ <b>Análisis Completado</b>\n\n"
-                f"📄 <b>Proyecto:</b> {resultado.get('proyecto', file_name)}\n\n"
-                f"🔌 <b>Materiales Detectados:</b>\n"
-            )
-            
-            if materiales:
-                total_items = sum(materiales.values())
-                for material, cantidad in sorted(materiales.items()):
-                    if cantidad > 0:
-                        nombre = material.replace("_", " ").title()
-                        respuesta += f"  • {nombre}: {cantidad}\n"
-                respuesta += f"\n<b>Total elementos:</b> {total_items}\n"
-            else:
-                respuesta += "  <i>No se detectaron materiales</i>\n"
-            
-            respuesta += (
-                f"\n📊 <b>Estadísticas:</b>\n"
-                f"  • Fragmentos: {stats.get('fragmentos_procesados', 0)}/{stats.get('total_fragmentos', 0)}\n"
-                f"  • Tiempo: {stats.get('tiempo_total_segundos', 0)}s\n"
-            )
-            
-            await mensaje_progreso.edit_text(respuesta, parse_mode="HTML")
-        else:
-            errores = resultado.get("errores", ["Error desconocido"])
-            respuesta = (
-                f"⚠️ <b>Error en el Análisis</b>\n\n"
-                f"No se pudo completar el análisis.\n\n"
-                f"<b>Errores:</b>\n"
-            )
-            for i, error in enumerate(errores[:3], 1):
-                respuesta += f"{i}. {error}\n"
-            
-            if len(errores) > 3:
-                respuesta += f"\n<i>...y {len(errores) - 3} errores más</i>"
-            
-            await mensaje_progreso.edit_text(respuesta, parse_mode="HTML")
-            
-        if path_local.exists():
-            os.remove(path_local)
-            logger.info(f"🗑️ Archivo temporal eliminado: {path_local}")
+    reporte = f"📊 **Cómputo Detallado de Materiales**\n"
+    reporte += f"📂 Archivo: `{os.path.basename(pdf_path)}` ({paginas_totales} pág.)\n"
+    reporte += "------------------------------------------\n"
     
-    except Exception as e:
-        logger.error(f"Error crítico en handle_pdf_directo: {e}", exc_info=True)
-        await update.message.reply_text(
-            f"❌ <b>Error Crítico en Servidor</b>\n\n{str(e)}",
-            parse_mode="HTML"
-        )
-
-### IMPLEMENTACION CON YOLOV5 Y SLICING MANUAL (SIN PASAR POR EL ORQUESTADOR, SOLO PARA CONTEO DE MATERIALES EN PDF)
-
-def procesar_plano_con_slicing(img_bgr, slice_size=1024):
-    # Convertir a RGB para que el modelo reconozca los patrones de entrenamiento
-    img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
-    h, w = img_rgb.shape[:2]
-    conteo_local = {}
-    
-    # Parámetros de ventana deslizante
-    stride = int(slice_size * 0.8) # 20% de solapamiento
-    
-    for y in range(0, h, stride):
-        for x in range(0, w, stride):
-            # Extraer fragmento
-            tile = img_rgb[y:y+slice_size, x:x+slice_size]
-            
-            # Inferencia (imgsz debe coincidir con tu entrenamiento de 1024)
-            results = model.predict(source=tile, imgsz=1024, conf=0.4, verbose=False)
-            
-            for r in results:
-                for box in r.boxes:
-                    clase = model.names[int(box.cls)]
-                    conteo_local[clase] = conteo_local.get(clase, 0) + 1
-                    
-    return conteo_local
-
-async def handle_pdf2(update, context):
-    file = await context.bot.get_file(update.message.document.file_id)
-    pdf_path = f"temp_{update.message.document.file_name}"
-    await file.download_to_drive(pdf_path)
-
-    # A. Convertir PDF a Imagen (Alta resolución para no perder detalle)
-    # Usamos 300 DPI para mantener la escala de Ingeniería SIE
-    images = convert_from_path(pdf_path, dpi=300)
-    
-    total_materiales = {}
-
-    for i, image in enumerate(images):
-        # Convertir PIL image a formato OpenCV (BGR)
-        open_cv_image = np.array(image)
-        img_bgr = open_cv_image[:, :, ::-1].copy() 
+    # Ordenamos alfabéticamente por nombre de material
+    for mat in sorted(registro_materiales.keys()):
+        datos = registro_materiales[mat]
+        total = datos["total"]
+        # Convertimos el set de páginas a una lista ordenada y luego a texto
+        pags_list = sorted(list(datos["paginas"]))
+        pags_str = ", ".join(map(str, pags_list))
         
-        # B. Aplicar Slicing Manual (ventana deslizante de 1024px)
-        detecciones_pagina = procesar_plano_con_slicing(img_bgr)
-        
-        # C. Sumar resultados al conteo global
-        for material, cantidad in detecciones_pagina.items():
-            total_materiales[material] = total_materiales.get(material, 0) + cantidad
-
-    # D. Enviar respuesta al usuario
-    mensaje_final = "📊 **Resumen de Materiales Detectados:**\n"
-    for mat, cant in total_materiales.items():
-        mensaje_final += f"• {mat.capitalize()}: {cant}\n"
+        reporte += f"🔹 **{mat}**: {total} _(Pág: {pags_str})_\n"
     
-    await update.message.reply_text(mensaje_final, parse_mode='Markdown')
-    os.remove(pdf_path) # Limpieza
+    return reporte
 
 async def main():
     logger.info("Iniciando bot de Telegram...")

@@ -229,20 +229,6 @@ def get_tools_declarations():
                             }
                         }
                     }
-                ),
-                types.FunctionDeclaration(
-                    name="analizar_esquema_unifilar",
-                    description="Se activa automáticamente cuando se recibe la ruta de un archivo PDF que contiene esquemas unifilares y topográficos de tableros eléctricos. Realiza el conteo de materiales para el área de Cotizaciones.",
-                    parameters={
-                        "type": "object",
-                        "properties": {
-                            "pdf_path": {
-                                "type": "string",
-                                "description": "Ruta completa al archivo PDF del esquema unifilar"
-                           }
-                        },
-                        "required": ["pdf_path"]
-                    }
                 )
             ]
         )
@@ -256,363 +242,9 @@ FUNCTION_MAP = {
     "listar_gabinetes_disponibles": None,
     "validar_configuracion": None,
     "actualizar_datos": None,
-    "analizar_esquema_unifilar": None
 }
 
-# === IMPLEMENTACIÓN DE LAS FUNCIONES ===
-
-PROMPT_ANALISIS =  """ Actúa como un sistema experto en visión artificial para la industria eléctrica. Tu objetivo es identificar, clasificar y localizar componentes en fragmentos de planos 
-unifilares para un sistema de cotización automática.
-
-Reglas de Localización:
-Sistema de Coordenadas: Utiliza un plano de 0 a 1000 para ambos ejes (X e Y).
-Punto de Origen: El punto (0,0) es la esquina superior izquierda del fragmento de imagen provisto.
-Centro Geométrico: Debes calcular las coordenadas x e y basándote en el centro exacto del símbolo gráfico del componente detectado.
-
-Consideraciones:
-- Por cada ícono de fusible y de luminaria, DEBES CONTAR 3 ELEMENTOS por símbolo individual correspondiente. 
-- Para componentes sin etiquetas (como luminarias y fusibles), guiate por su forma geométrica:
-  Luminarias: "Detectar círculos que contengan una 'X' interna. Ignorar si la 'X' está fuera del círculo".
-  Fusibles: "Detectar rectángulos estrechos atravesados por una línea longitudinal continua. No confundir con cables de conexión; el fusible siempre tiene un borde cerrado".
-- Para cada componente sin etiqueta detectado, asigná un ID virtual siguiendo el esquema TIPO-COORDENADA. Ejemplo: LUM-250-400. Esto permitirá que el proceso de deduplicación lo trate como un objeto único y real.
-
-Símbolos a identificar:
-1. Térmica (Interruptor Automático)
-Estructura principal: Una línea vertical interrumpida por un segmento diagonal (brazo del interruptor).
-Rasgo distintivo superior: En el extremo de la línea superior, hay una pequeña "X" o asterisco. Justo 
-encima de la "X", hay un guion horizontal corto. Rasgo distintivo inferior: El extremo del brazo diagonal 
-termina en una forma de "escalera" o gancho con dos ángulos rectos.
-Forma alternativa:
-En algunos casos, la parte superior puede no presentar la "x", y en su lugar, el brazo diagonal puede terminar directamente en la forma de escalera, con solo un ángulo recto debajo.
-
-Identificador: suele ir acompañado de TM y el número de térmica, y el amperaje, o de solo alguno de esos dos valores.
-Ejemplo: -TM4 2x16A 
-
-2. Iluminaria (Luminaria)
-Estructura principal: Un círculo perfecto centrado sobre una línea vertical continua que lo atraviesa de polo a polo.
-Contenido: Dentro del círculo, dos líneas diagonales se cruzan en el centro exacto, formando una "X" cuyos extremos
-tocan el borde interior del círculo.
-Identificador: puede figurar con una (R) próxima al símbolo y un x3, indicando que deben contarse 3 luminarias
-
-3. Fusibles
-Estructura principal: Un rectángulo vertical muy delgado y alargado.
-Relación espacial: Una línea vertical atraviesa el rectángulo por su eje central, sobresaliendo tanto por la parte
-superior como por la inferior. El interior del rectángulo suele ser vacío (blanco).
-Identificador: pueden ir acompañados por el amperaje y la cantidad, ubicados próximos al símbolo.
-Ejemplo: 2A x3 (debes contar 3 unidades para ese ícono)
-
-4. Disyuntor (Diferencial)
-Estructura principal: Línea vertical con brazo diagonal (interruptor).
-Lógica de detección: Presenta un óvalo horizontal (toroide) que rodea la línea vertical inferior.
-Vínculo de control: A la izquierda del interruptor, hay un cuadrado con una cruz interna conectado mediante una 
-línea en ángulo recto que baja hacia el óvalo.
-Identificador: están acompañados de la configuración y capacidad, con la corriente diferencial nominal.
-Ejemplo: 4x25A 30mA
-
-5. Guardamotor
-Envolvente: Un rectángulo horizontal grande que contiene tres líneas verticales paralelas en su interior.
-Componentes internos: Cada una de las tres líneas tiene un interruptor con el símbolo de la "escalera" (térmico).
-Mecanismo: A la izquierda, fuera de las líneas pero dentro del rectángulo grande, hay un bloque de control (cuadrado con cruz) 
-vinculado a los tres interruptores por una línea horizontal.
-
-6. Seccionador
-Estructura: Línea vertical interrumpida con brazo diagonal.
-Actuador: Encima del brazo diagonal, hay un elemento sólido en forma de martillo o "T" invertida.
-Variante con semicírculo: Una versión incluye un pequeño arco o semicírculo unido a la base del "martillo", simulando una manija manual.
-Variante con flecha: la otra versión incluye una pequeña flecha unida a la base del "martillo".
-identificador: van acompañados del tipo de dispositivo INS y la cantidad de polos y capacidad
-Ejemplo: -Q0 INS 4x63A
-
-7. Contactor
-Símbolo simple: Una línea diagonal (brazo) que tiene un pequeño gancho o semicírculo en su extremo superior.
-Suele estar acompañado por la letra "K" a la derecha. Símbolo de bobina (completo): Un rectángulo vertical (bobina) 
-a la izquierda con una línea horizontal que lo conecta a un par de círculos alineados verticalmente (contactos) a la 
-derecha. El rectángulo suele tener una "N" roja en su base.
-
-8. Fotocélula
-Estructura: Un círculo con la letra "F" en su centro.
-Conexiones: Una línea horizontal atraviesa el círculo por el medio.
-Indicador de luz: Dos líneas diagonales en forma de "rayo" o zigzag entran al círculo desde el exterior 
-(generalmente desde la esquina superior derecha e inferior izquierda).
-Identificador: suele estar acompañado de su amperaje 
-Ejemplo: Fotocélula 10A
-
-ERRORES CRÍTICOS A EVITAR:
-❌ NO cuentes elementos CORTADOS por los bordes del fragmento o incompletos
-❌ NO cuentes el MISMO elemento dos veces (si hay dos térmicas con el indicativo TM3, debes contar uno solo)
-❌ NO cuentes LÍNEAS DE CONEXIÓN como cables (solo cuenta si hay texto "Xx...")
-❌ NO cuentes TEXTOS como "220V", "Cocina", "Baño" (son anotaciones, no materiales)
-❌ NO cuentes BARRAS COLECTORAS (líneas gruesas horizontales de soporte)
-
-Ejemplos de análisis:
-
-EJEMPLO 1 - Fragmento simple:
-Descripción: Ves 1 pequeño rectángulo atravesado por la mitad por una línea vertical con el signo x3 a su lado, y 3 símbolos que corresponden a los de una térmica.
-Respuesta correcta:
-{"termicas": 3, "luminaria": 0, "fusibles": 3, "disyuntores": 0, "guardamotor": 0, "seccionador": 0, "contactor": 0, "fotocelula": 0}
-
-EJEMPLO 2 - Cabecera de Tablero General:
-Descripción: Ves una línea principal que atraviesa un símbolo con un brazo diagonal y un actuador en forma de martillo sólido en la parte superior etiquetado como -Q0 INS 4x63A. Debajo de este, la línea continúa hacia un símbolo con brazo diagonal, un cuadrado con una cruz a su izquierda y un óvalo horizontal que rodea la línea inferior, 
-identificado como 4x40A 30mA. Respuesta correcta:
-{"termicas": 0, "luminaria": 0, "fusibles": 0, "disyuntores": 1, "guardamotor": 0, "seccionador": 1, "contactor": 0, "fotocelula": 0}
-
-EJEMPLO 2 - Línea de Iluminación Automatizada:
-Descripción: Se observa un símbolo con brazo diagonal que termina en forma de escalera en la base y tiene una pequeña "X" con un guion arriba, con el texto -TM1 2x10A. 
-La línea sigue hacia un círculo que contiene una letra F y dos rayos en zigzag en los costados. Finalmente, la línea alimenta a 4 círculos, cada uno con una "X" interna y el signo (R) a su lado. 
-Respuesta correcta:
-{"termicas": 1, "luminaria": 4, "fusibles": 0, "disyuntores": 0, "guardamotor": 0, "seccionador": 0, "contactor": 0, "fotocelula": 1}
-
-EJEMPLO 3 - Control de Motor Trifásico:
-Descripción: Aparece un rectángulo horizontal grande que encierra tres líneas verticales paralelas; cada línea tiene una ruptura en forma de escalera y, a la 
-izquierda de todo el conjunto, hay un pequeño cuadrado con una cruz. Inmediatamente debajo, se ven 3 símbolos de brazo diagonal con un pequeño gancho circular 
-en el extremo superior, acompañados por la letra K. 
-Respuesta correcta:
-{"termicas": 0, "luminaria": 0, "fusibles": 0, "disyuntores": 0, "guardamotor": 1, "seccionador": 0, "contactor": 3, "fotocelula": 0}
-
-EJEMPLO 4 - Distribución con Fusibles y Térmicas:
-Descripción: Ves 3 rectángulos verticales muy delgados y alargados, cada uno con una línea que los atraviesa por el centro, identificados con el texto 2A x3. 
-Debajo de estos, hay 3 símbolos compuestos por una línea vertical, un brazo diagonal con terminación en escalera y una "X" superior, etiquetados como -TM5, -TM6 y -TM7. 
-Respuesta correcta:
-{"termicas": 3, "luminaria": 0, "fusibles": 3, "disyuntores": 0, "guardamotor": 0, "seccionador": 0, "contactor": 0, "fotocelula": 0}
-
-EJEMPLO 5 - Circuito de Maniobra y Protección:
-Descripción: Aparece un símbolo de brazo diagonal con un actuador de martillo que tiene una pequeña flecha en su base, identificado como INS 2x25A. A su lado, 
-hay un símbolo de brazo diagonal vinculado a un cuadrado con cruz y un óvalo inferior etiquetado como 30mA. 
-El circuito termina en un rectángulo vertical (bobina) a la izquierda conectado a dos círculos con una N roja. 
-Respuesta correcta:
-{"termicas": 0, "luminaria": 0, "fusibles": 0, "disyuntores": 1, "guardamotor": 0, "seccionador": 1, "contactor": 1, "fotocelula": 0}
-
-
-PROCESO DE VERIFICACIÓN (hazlo mentalmente antes de responder)
-Paso 1: ¿Hay elementos cortados en los bordes? → Ignóralos
-Paso 2: Para térmicas, cuenta CADA "TM..." diferente una sola vez, para así NO CONTAR EL MISMO MATERIAL 2 VECES
-Paso 3: ¿Los números tienen sentido? (¿20 térmicas en un fragmento pequeño? Revisar)
-Paso 4: ¿El JSON está bien formado? Sin comas finales
-
-Generá un JSON que sea una lista de objetos. 
-IMPORTANTE: 
-El campo 'tipo' debe ser estrictamente un String (texto), no una lista. 
-Los campos 'x' e 'y' deben ser Integer (números enteros). 
-SIN explicaciones. SIN markdown. Estructura exacta:
-[
-  {
-    "tipo": "nombre_del_material",
-    "identificador": "texto_proximo_si_existe",
-    "x": valor_entre_0_y_1000,
-    "y": valor_entre_0_y_1000
-  }
-]
-
-Ahora analiza el fragmento adjunto.
-
-"""
-
-def calculate_distance(p1, p2):
-    """Calcula la distancia euclidiana entre dos puntos."""
-    return math.sqrt((p1[0] - p2[0])**2 + (p1[1] - p2[1])**2)
-
-def deduplicate_detections(detections, threshold=30):
-    unique_elements = []
-    for new_det in detections:
-        is_duplicate = False
-        new_id = str(new_det.get('identificador', '')).strip().upper()
-        
-        for saved_det in unique_elements:
-            saved_id = str(saved_det.get('identificador', '')).strip().upper()
-            
-            # REGLA 1: Si tienen el mismo ID y son el mismo tipo, SON EL MISMO
-            if new_id and saved_id and new_id == saved_id and new_det['tipo'] == saved_det['tipo']:
-                is_duplicate = True
-                break
-            
-            # REGLA 2: Si no hay ID, usamos la distancia euclidiana
-            if new_det['tipo'] == saved_det['tipo']:
-                dist = math.sqrt(
-                    (new_det['pos_global'][0] - saved_det['pos_global'][0])**2 + 
-                    (new_det['pos_global'][1] - saved_det['pos_global'][1])**2
-                )
-                if dist < threshold:
-                    is_duplicate = True
-                    break
-        
-        if not is_duplicate:
-            unique_elements.append(new_det)
-            
-    return unique_elements
-
-
-async def analizar_esquema_unifilar(pdf_path: str) -> Dict[str, Any]:
-    """
-    Versión mejorada con deduplicación por coordenadas globales.
-    Usa el sistema 0-1000 de Gemini para mapear el tablero completo.
-    """
-    from unifilar import (
-        ConfiguracionProcesamiento, 
-        ProcesadorEsquemaUnifilar, 
-        FragmentoImagen
-    )
-    import json
-    import logging
-    import os
-    from datetime import datetime
-        
-    logger = logging.getLogger(__name__)
-    inicio = asyncio.get_event_loop().time()
-    
-    # ================================================================
-    # 0. VARIABLES DE ESTADO GLOBALES
-    # ================================================================
-    detecciones_globales = []  # Lista maestra para todos los fragmentos
-    errores = []
-    fragmentos_procesados = 0
-    fragmentos_fallidos = 0
-    nombre_proyecto = Path(pdf_path).stem
-    
-    try:
-        # 1. VALIDAR PDF (Igual a tu código)
-        pdf_path_obj = Path(pdf_path)
-        if not pdf_path_obj.exists():
-            raise FileNotFoundError(f"PDF no encontrado: {pdf_path}")
-        
-        # 2. PROCESAR PDF
-        config = ConfiguracionProcesamiento(
-            dpi=300,
-            grilla_filas=2,
-            grilla_columnas=2,
-            overlap_px=10,  
-            corte_superior=0.5,
-            formato_salida="PNG"
-        )
-        
-        procesador = ProcesadorEsquemaUnifilar(config)
-        fragmentos: List[FragmentoImagen] = await asyncio.to_thread(
-            procesador.procesar_pdf,
-            str(pdf_path_obj)
-        )
-        
-        # carpeta_resultados = Path("resultados") / nombre_proyecto
-        
-        # logger.info(f"Guardando fragmentos en: {carpeta_resultados}")
-        # await asyncio.to_thread(
-        #     procesador.guardar_en_disco,
-        #     fragmentos,
-        #     str(carpeta_resultados)
-        # )
-                
-        # 3. CONFIGURAR GEMINI (Igual a tu código)
-        client = genai.Client(api_key=os.getenv('GOOGLE_API_KEY'))
-        
-        # ================================================================
-        # 4. ANALIZAR FRAGMENTOS Y MAPEAR COORDENADAS
-        # ================================================================
-        
-        logger.info("🔍 Analizando fragmentos y mapeando coordenadas...")
-        
-        for idx, fragmento in enumerate(fragmentos, start=1):
-            try:
-                contenido = [
-                    { "text": PROMPT_ANALISIS },
-                    { "inline_data": { "mime_type": "image/png", "data": fragmento.datos } }
-                ]
-                
-                response = await asyncio.to_thread(
-                    client.models.generate_content,
-                    model='gemini-2.0-flash',
-                    contents=contenido,
-                    config=types.GenerateContentConfig(temperature=0.1)
-                )
-                
-                texto = response.text.strip() # texto limpio 
-                
-                # Limpieza de markdown JSON
-                if "```json" in texto:
-                    texto = texto.split("```json")[1].split("```")[0]
-                elif "```" in texto:
-                    texto = texto.split("```")[1].split("```")[0]
-                    
-                try:
-                    #convierto el texto a lista de python para poder usarlo
-                    detecciones_locales = json.loads(texto)
-                        
-                    if isinstance(detecciones_locales, list):
-                        logger.info(f"  ✓ {len(detecciones_locales)} detecciones locales")
-                        
-                        for det in detecciones_locales:
-                            # bbox = (x0, y0, x1, y1)
-                            val_x = float(det.get('x', 0))
-                            val_y = float(det.get('y', 0))
-
-                            # 3. Guardamos la posición como TUPLA (paréntesis), NO como lista
-                            gx = fragmento.x_offset + (val_x * fragmento.ancho / 1000)
-                            gy = fragmento.y_offset + (val_y * fragmento.alto / 1000)
-
-                            detecciones_globales.append({
-                                "tipo": str(det.get('tipo', 'desconocido')).lower().strip(),
-                                "pos_global": (gx, gy) 
-                            })
-                        fragmentos_procesados += 1
-                        logger.info(f"fragmento {idx}: {len(detecciones_locales)} detectados")
-                    else:
-                        logger.warning(f"Fragmento {idx}: Respuesta no es una lista.")
-                
-                except json.JSONDecodeError:
-                    logger.error(f" ❌ Fragmento {idx}: Error al decodificar JSON")
-                
-            except Exception as e:
-                errores.append(f"Error en fragmento {idx}: {str(e)}")
-                fragmentos_fallidos += 1
-
-        # ================================================================
-        # 5. DEDUPLICACIÓN Y CONSOLIDACIÓN FINAL
-        # ================================================================
-        
-        logger.info(f"detecciones globales: {detecciones_globales}")
-        logger.info("📊 Eliminando duplicados por proximidad espacial...")
-        
-        # Llamamos a la función de deduplicación que definimos antes
-        detecciones_unicas = deduplicate_detections(detecciones_globales, threshold=150) 
-        logger.info(f"DETECCIONES ÚNICAS: {detecciones_unicas}")
-        # Mapeo de categorías para el conteo final
-        categorias = [
-            "termica", "luminaria", "fusibles", "disyuntor", 
-            "guardamotor", "seccionador", "contactor", "fotocelula"
-        ]
-        
-        conteo_final = {cat: 0 for cat in categorias}
-        for det in detecciones_unicas:
-            tipo = det['tipo']
-            if tipo in conteo_final:
-                conteo_final[tipo] += 1
-            # Manejo de plurales o variaciones comunes
-            elif tipo == "termicas": conteo_final["termica"] += 1
-            elif tipo == "disyuntores": conteo_final["disyuntor"] += 1
-
-        # ================================================================
-        # 6. RESULTADO FINAL
-        # ================================================================
-        
-        tiempo_total = asyncio.get_event_loop().time() - inicio
-        total_fragmentos = len(fragmentos)
-        logger.info(f"✅ {total_fragmentos} fragmentos extraídos")
-        
-        return {
-            "status": "success",
-            "proyecto": nombre_proyecto,
-            "conteo_materiales": conteo_final,
-            "metadatos": {
-                "total_detecciones_crudas": len(detecciones_globales),
-                "total_detecciones_unicas": len(detecciones_unicas),
-                "fragmentos_procesados": fragmentos_procesados,
-                "tiempo_total_segundos": round(tiempo_total, 2),
-                "total_fragmentos": total_fragmentos,
-                "timestamp": datetime.now().isoformat(),
-            },
-            "errores": errores
-        }
-
-    except Exception as e:
-        logger.error(f"❌ Error crítico: {e}", exc_info=True)
-        return {"status": "error", "errores": [str(e)]}
+# === IMPLEMENTACIÓN DE FUNCIONES ===
 
 async def iniciar_recoleccion_interactiva(chat_id: int):
     """
@@ -859,7 +491,6 @@ async def _ejecutar_dimensionamiento_con_datos(datos: dict) -> str:
         # Resetear estado global también en caso de error
         resetear_estado_recoleccion(chat_id_actual)
         return f"❌ Error: {str(e)}"
-
 
 def exportar_a_excel(
     gabinete,
@@ -1350,7 +981,6 @@ FUNCTION_MAP = {
     "buscar_seleccionador": buscar_seleccionador,
     "listar_gabinetes_disponibles": listar_gabinetes_disponibles,
     "validar_configuracion": validar_configuracion,
-    "analizar_esquema_unifilar": analizar_esquema_unifilar
 }
 
 
@@ -1515,10 +1145,6 @@ async def run_mcp(question:str, chat_id_original=None) -> str:
                             materiales_eliminar_indices=func_args.get("materiales_eliminar_indices"),
                             descripcion_cambios=func_args.get("descripcion_cambios")
                         )
-                    elif func_name == "analizar_esquema_unifilar":
-                        result = await func(
-                            pdf_path = func_args.get("pdf_path"),
-                        )
                     else:
                         result = "❌ Función no implementada"
                     
@@ -1550,8 +1176,6 @@ FUNCTION_MAP["buscar_seleccionador"] = buscar_seleccionador
 FUNCTION_MAP["listar_gabinetes_disponibles"] = listar_gabinetes_disponibles
 FUNCTION_MAP["validar_configuracion"] = validar_configuracion
 FUNCTION_MAP["actualizar_datos"] = actualizar_datos
-FUNCTION_MAP["analizar_esquema_unifilar"] = analizar_esquema_unifilar
-
 
 # if __name__ == "__main__":
     

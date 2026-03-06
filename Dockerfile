@@ -26,3 +26,4 @@ RUN chmod -R 777 /app/data /app/resultados /app/temp_pdf || true
 
 # Comando de arranque
 CMD ["python", "bot.py"]
+
