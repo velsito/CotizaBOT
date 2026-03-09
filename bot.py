@@ -7,6 +7,12 @@ import http.server
 import socketserver
 import threading
 
+from unifilar_handler import build_unifilar_handler
+
+
+from analyzer import UnifilarAnalyzer 
+# from unifilar_handler import build_unifilar_handler
+
 ### 
 import tempfile
 import numpy as np
@@ -14,7 +20,13 @@ from pdf2image import convert_from_path
 import gc
 ###
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+MODEL_PATH = os.getenv("MODEL_PATH",  "weights/best.pt")
+DEVICE     = os.getenv("DEVICE",      "cpu")
+CONFIDENCE = float(os.getenv("CONFIDENCE", "0.3"))
+OUTPUT_DIR = os.getenv("OUTPUT_DIR",  "/tmp/outputs")
+
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand
+from telegram.constants import ChatAction, ParseMode
 from servidor_mcp import registrar_callback_recoleccion
 from telegram.ext import (
     Application,
@@ -41,7 +53,17 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-
+DPI = 300
+MAX_PHOTO_BYTES = 9 * 1024 * 1024
+EMOJI = {
+    "ok":      "✅",
+    "warn":    "⚠️",
+    "page":    "📄",
+    "chart":   "📊",
+    "gear":    "⚙️",
+    "img":     "🖼",
+    "error":   "❌",
+}
 
 ###
 class HealthCheckHandler(http.server.BaseHTTPRequestHandler):
@@ -1079,7 +1101,17 @@ def handle_pdf(pdf_path, analyzer):
     
     return reporte
 
-async def main():
+async def main() -> None:
+    
+    logger.info("cargando modelo yolo...")
+    analyzer = UnifilarAnalyzer(
+        model_path=MODEL_PATH,
+        device = DEVICE, 
+        confidence_threshold=0.5,
+        output_dir=OUTPUT_DIR
+        )
+    logger.info("✅ UnifilarAnalyzer inicializado")
+    
     logger.info("Iniciando bot de Telegram...")
     threading.Thread(target = run_health_server, daemon=True).start()
     registrar_callback_recoleccion(callback_desde_mcp)
@@ -1089,24 +1121,37 @@ async def main():
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("nuevo", start_new)) 
     app.add_handler(CommandHandler("cancelar", cancelar))
-    pdf_handler = MessageHandler(filters.Document.PDF & ~filters.COMMAND, handle_pdf) # handler para los pdf de los unifilares
-    app.add_handler(pdf_handler)
+    
+    ####
+    
+   
+    app.bot_data["analyzer"] = analyzer
+    app.add_handler(build_unifilar_handler(analyzer))
+    
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
     await app.initialize()
     await app.start()
 
-    await app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
+    async def post_init(application: Application) -> None:
+        await application.bot.set_my_commands([
+            BotCommand("start", "Iniciar conversación"),
+            BotCommand("help", "Mostrar ayuda y ejemplos de uso"),
+            BotCommand("nuevo", "Limpiar memoria y empezar de nuevo"),
+            BotCommand("cancelar", "Cancelar proceso actual")
+        ])
 
     logger.info("Bot iniciado. Esperando mensajes...")
+    
+    await app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
     
     try:
         while True:
             await asyncio.sleep(1)
     except (KeyboardInterrupt, SystemExit):
-            await app.stop()
-            await app.shutdown()
-            logger.info("Bot detenido.")
+        await app.stop()
+        await app.shutdown()
+        logger.info("Bot detenido.")
             
 if __name__ == "__main__":
     
