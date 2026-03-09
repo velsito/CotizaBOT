@@ -8,10 +8,7 @@ import socketserver
 import threading
 
 from unifilar_handler import build_unifilar_handler
-
-
 from analyzer import UnifilarAnalyzer 
-# from unifilar_handler import build_unifilar_handler
 
 ### 
 import tempfile
@@ -1133,25 +1130,17 @@ async def main() -> None:
     await app.initialize()
     await app.start()
 
-    async def post_init(application: Application) -> None:
-        await application.bot.set_my_commands([
-            BotCommand("start", "Iniciar conversación"),
-            BotCommand("help", "Mostrar ayuda y ejemplos de uso"),
-            BotCommand("nuevo", "Limpiar memoria y empezar de nuevo"),
-            BotCommand("cancelar", "Cancelar proceso actual")
-        ])
-
     logger.info("Bot iniciado. Esperando mensajes...")
     
     await app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
     
-    try:
-        while True:
-            await asyncio.sleep(1)
-    except (KeyboardInterrupt, SystemExit):
-        await app.stop()
-        await app.shutdown()
-        logger.info("Bot detenido.")
+    # try:
+    #     while True:
+    #         await asyncio.sleep(1)
+    # except (KeyboardInterrupt, SystemExit):
+    #     await app.stop()
+    #     await app.shutdown()
+    #     logger.info("Bot detenido.")
             
 if __name__ == "__main__":
     
