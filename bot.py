@@ -987,7 +987,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def callback_desde_mcp(mensaje: str, tipo: str, chat_id:int, **kwargs):
     """Función callback que programa tareas asíncronas"""
-    chat_id_actual = chat_id  # Usar el chat_id pasado como parámetro
+    chat_id_actual = chat_id  
 
     try:
         loop = asyncio.get_event_loop()
@@ -1042,13 +1042,11 @@ async def enviar_archivo_telegram(chat_id:int, contenido_bytes:bytes, nombre_arc
         logger.error(f"Error enviando archivo a chat_id {chat_id}: {e}")
 
 def handle_pdf(pdf_path, analyzer):
-    # Estructura: {'Material': {'total': 0, 'paginas': set()}}
     registro_materiales = {}
     paginas_totales = 0
     
     with tempfile.TemporaryDirectory() as temp_dir:
         try:
-            # Convertimos a rutas de archivos para no saturar RAM
             images = convert_from_path(
                 pdf_path, 
                 dpi=300, 
@@ -1075,10 +1073,9 @@ def handle_pdf(pdf_path, analyzer):
                 registro_materiales[clase]["total"] += 1
                 registro_materiales[clase]["paginas"].add(num_pagina)
             
-            # Limpieza post-página
             gc.collect()
 
-    # --- CONSTRUCCIÓN DEL REPORTE DETALLADO ---
+    # --- REPORTE DETALLADO ---
     if not registro_materiales:
         return f"⚠️ No se detectaron materiales en las {paginas_totales} páginas.", None
 
@@ -1086,11 +1083,9 @@ def handle_pdf(pdf_path, analyzer):
     reporte += f"📂 Archivo: `{os.path.basename(pdf_path)}` ({paginas_totales} pág.)\n"
     reporte += "------------------------------------------\n"
     
-    # Ordenamos alfabéticamente por nombre de material
     for mat in sorted(registro_materiales.keys()):
         datos = registro_materiales[mat]
         total = datos["total"]
-        # Convertimos el set de páginas a una lista ordenada y luego a texto
         pags_list = sorted(list(datos["paginas"]))
         pags_str = ", ".join(map(str, pags_list))
         
@@ -1098,50 +1093,38 @@ def handle_pdf(pdf_path, analyzer):
     
     return reporte
 
-async def main() -> None:
+def main():
     
     logger.info("cargando modelo yolo...")
     analyzer = UnifilarAnalyzer(
         model_path=MODEL_PATH,
-        device = DEVICE, 
+        device=DEVICE, 
         confidence_threshold=0.5,
         output_dir=OUTPUT_DIR
-        )
+    )
     logger.info("✅ UnifilarAnalyzer inicializado")
     
     logger.info("Iniciando bot de Telegram...")
-    threading.Thread(target = run_health_server, daemon=True).start()
+    threading.Thread(target=run_health_server, daemon=True).start()
     registrar_callback_recoleccion(callback_desde_mcp)
 
-    app = crear_bot_application(TELEGRAM_TOKEN) # referencia al bot
+    app = crear_bot_application(TELEGRAM_TOKEN)
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("nuevo", start_new)) 
     app.add_handler(CommandHandler("cancelar", cancelar))
     
-    ####
-    
-   
     app.bot_data["analyzer"] = analyzer
     app.add_handler(build_unifilar_handler(analyzer))
     
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    
-    await app.initialize()
-    await app.start()
 
     logger.info("Bot iniciado. Esperando mensajes...")
+    app.run_polling(                        
+        allowed_updates=Update.ALL_TYPES,
+        drop_pending_updates=True,
+    )
     
-    await app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
-    
-    # try:
-    #     while True:
-    #         await asyncio.sleep(1)
-    # except (KeyboardInterrupt, SystemExit):
-    #     await app.stop()
-    #     await app.shutdown()
-    #     logger.info("Bot detenido.")
-            
 if __name__ == "__main__":
     
-    asyncio.run(main())
+    main()

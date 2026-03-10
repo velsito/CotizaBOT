@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 SLICE_SIZE = 640          # Tamaño del slice (coincide con el entrenamiento)
 OVERLAP_RATIO = 0.2       # 20 % de solapamiento horizontal y vertical
 CONFIDENCE_THRESHOLD = 0.4
-IOU_THRESHOLD = 0.5
+IOU_THRESHOLD = 0.7 # aumentar para modificar la tolerancia a cajas solapadas
 
 # Paleta de colores por clase (BGR para OpenCV)
 CLASS_COLORS: dict[str, tuple[int, int, int]] = {

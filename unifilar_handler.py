@@ -32,6 +32,7 @@ import os
 import tempfile
 from collections import Counter
 from pathlib import Path
+import cv2
 
 import fitz  # PyMuPDF
 from telegram import Update
@@ -48,6 +49,7 @@ logger = logging.getLogger(__name__)
 
 DPI = 300                          # Resolución de conversión PDF → PNG
 MAX_PHOTO_BYTES = 9 * 1024 * 1024  # 9 MB: límite de Telegram para sendPhoto
+MAX_PHOTO_DIMENSION = 2560 # limite para send_photo
 EMOJI = {
     "ok":      "✅",
     "warn":    "⚠️",
@@ -272,25 +274,35 @@ async def handle_unifilar_pdf(
                 )
 
                 caption = (
-                    f"{EMOJI['img']} Página {res['page']} — "
+                    f" Página {res['page']} — "
                     f"{sum(res['counts'].values())} componentes detectados"
                 )
                 file_size = Path(annotated).stat().st_size
 
                 with open(annotated, "rb") as img_file:
-                    if file_size <= MAX_PHOTO_BYTES:
-                        # Enviar como foto (preview inline en Telegram)
-                        await context.bot.send_photo(
-                            chat_id=chat_id,
-                            photo=img_file,
-                            caption=caption,
-                        )
-                    else:
-                        # Imagen muy grande → enviar como documento descargable
+                    file_size = Path(annotated).stat().st_size
+                    
+                    # Leer dimensiones sin cargar la imagen completa en RAM
+                    img_check = cv2.imread(annotated, cv2.IMREAD_UNCHANGED)
+                    h, w = img_check.shape[:2]
+                    del img_check
+                    gc.collect()
+                    
+                    too_large_dims = (w > MAX_PHOTO_DIMENSION or h > MAX_PHOTO_DIMENSION)
+                    too_large_bytes = (file_size > MAX_PHOTO_BYTES)
+                    
+                    if too_large_dims or too_large_bytes:
+                        # Enviar como documento si se pasa de los límites para telegram 
                         await context.bot.send_document(
                             chat_id=chat_id,
                             document=img_file,
-                            filename=f"anotado_pagina_{res['page']}.png",
+                            filename=f"resultados_pagina_{res['page']}.png",
+                            caption=caption,
+                        )
+                    else:
+                        await context.bot.send_photo(
+                            chat_id=chat_id,
+                            photo=img_file,
                             caption=caption,
                         )
 
@@ -305,9 +317,6 @@ async def handle_unifilar_pdf(
             parse_mode=ParseMode.MARKDOWN_V2,
         )
 
-
-# ---------------------------------------------------------------------------
-# Factory — úsala en main()
 # ---------------------------------------------------------------------------
 
 def build_unifilar_handler(analyzer: UnifilarAnalyzer) -> MessageHandler:
